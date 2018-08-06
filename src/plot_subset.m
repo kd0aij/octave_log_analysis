@@ -1,21 +1,12 @@
-function plot_track(index1, index2, segments, POS)
+function plot_subset(index1, index2, POS)
 
-if (index1 > 1)
-  startIndex = segments{index1-1}(5);
-else
-  startIndex = segments{index1}(4);
-endif
-
+startIndex = index1;
 # truncate first 10 seconds of POS data (250 samples)
 if (startIndex < 250) 
   startIndex = 250;
 endif
 
-if (index2 < length(segments))
-  endIndex = segments{index2+1}(4);
-else
-  endIndex = segments{index2}(5);
-endif
+endIndex = index2;
 
 lat=POS.data(startIndex:endIndex,3);
 lon=POS.data(startIndex:endIndex,4);
