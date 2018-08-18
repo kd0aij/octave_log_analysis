@@ -1,20 +1,24 @@
-function plot_track(index1, index2, segments, POS, label='', plot3d=0)
+function plot_track(index1, segments, POS, label='')
 
+# it appears that GPS location is accurate when POS data starts
 pts = POS.data(:,1);
 iniTime = pts(1);
 
+# vehicle has just departed "straight and level"
 startTime = segments{index1}(1);
 
 if (startTime < iniTime) 
   startTime = iniTime;
 endif
 
-if (index2 < length(segments))
-  endTime = segments{index2+1}(2);
+# if this isn't the last maneuver, include the straight and level exit
+if (index1 < length(segments))
+  endTime = segments{index1+1}(2);
 else
-  endTime = segments{index2}(2);
+  endTime = segments{index1}(2);
 endif
 
+# find the record numbers for start and end times
 startIndex = 1;
 while (pts(startIndex) < startTime)
   startIndex += 1;
@@ -43,43 +47,40 @@ z -= 1808;
 a=16*(pi/180);
 xyzr=[cos(a)*x.-sin(a)*y, sin(a)*x.+cos(a)*y, z];
 
-fignum = 10 * index1;
-figure(fignum)
+fignum = index1;
+figure(fignum, 'position', [100,100,800,800])
+subplot(2,2,1)
 plot(xyzr(:,1),xyzr(:,2))
 hold
 plot(xyzr(1,1),xyzr(1,2),"*k")
 
 axis equal
 grid on
-title (sprintf("%s Top view, segments %d:%d", label, index1, index2))
+title (sprintf("Plan view"))
 xlabel "east (m)"
 ylabel "north (m)"
-print (sprintf("%s_top-%d_%d.jpg", label, index1, index2))
 
-figure(fignum+1)
+subplot(2,2,2)
 plot(xyzr(:,1),xyzr(:,3));
 hold
 plot(xyzr(1,1),xyzr(1,3),"*k")
 axis equal
 grid on
-title (sprintf("%s Side view, segments %d:%d", label, index1, index2))
+title (sprintf("North elevation", label))
 xlabel "east (m)"
 ylabel "alt (m)"
-print (sprintf("%s_side-%d_%d.jpg", label, index1, index2))
 
-figure(fignum+2)
+subplot(2,2,3)
 plot(xyzr(:,2),xyzr(:,3));
 hold
 plot(xyzr(1,2),xyzr(1,3),"*k")
 axis equal
 grid on
-title (sprintf("%s End view, segments %d:%d", label, index1, index2))
+title (sprintf("East elevation", label))
 xlabel "north (m)"
 ylabel "alt (m)"
-print (sprintf("%s_end-%d_%d.jpg", label, index1, index2))
 
-if (plot3d)
-figure 4
+subplot(2,2,4)
 plot3(xyzr(:,1),xyzr(:,2),xyzr(:,3))
 hold
 plot(xyzr(1,1),xyzr(1,2),"*k")
@@ -88,9 +89,10 @@ ylabel("y")
 zlabel("z")
 axis equal
 grid on
-title (sprintf("%s 3D view, segments %d:%d", label, index1, index2))
+title (sprintf("3D view", label))
 xlabel "east (m)"
 ylabel "north (m)"
 zlabel "alt (m)"
-print (sprintf("%s_3d-%d_%d.jpg", label, index1, index2))
-endif
+print (sprintf("%s_maneuver_%d.jpg", label, index1))
+
+close

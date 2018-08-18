@@ -23,7 +23,7 @@
 ## Author: markw <markw@DESKTOP-AR9SD00>
 ## Created: 2018-06-18
 
-function segments = segment_maneuvers (sl_dur, p_lp, POS, ATT)
+function segments = segment_maneuvers (sl_dur, p_lp, ATT, NKF1, POS)
 # construct Nx2 matrix containing the start and end indices of
 # straight-and-level flight segments
 # default sl_dur is 3.0
@@ -33,26 +33,38 @@ function segments = segment_maneuvers (sl_dur, p_lp, POS, ATT)
 
 # return list of timestamps [start, end]
 
-pts = POS.data(:,1);
-lat=POS.data(:,3);
-lon=POS.data(:,4);
-z = POS.data(:,5);
-
 ats = ATT.data(:,1);
 roll = ATT.data(:,4);
 pitch = ATT.data(:,6);
 yaw = ATT.data(:,8);
 
-N = size(ats)(1);
+nts = NKF1.data(:,1);
+
+# assume sample rate is the same for ATT and NKF1, but starting time is later for NKF1
+# find first matching timestamps
+if (ats(1) < nts(1))
+  aStart = 2;
+  while (ats(aStart) < nts(1))
+    aStart += 1;
+  endwhile
+else
+  print("error: NKF1 start time earlier than ATT\n")
+  return
+endif
+    
+vz = NKF1.data(:,8);
+
+N = length(ats);
 filtRoll = zeros(N,1);
 filtPitch = zeros(N,1);
+snl = zeros(N,1);
 
   slBegin = 1;
   avgRoll = 0;
-  avgPitch = 0;
+  avgVz = 0;
   d = p_lp; # single-pole IIR low pass filter
-  rollThresh = 15.0; # 15 degrees
-  pitchThresh = 15.0; # 15 degrees
+  rollThresh = 15.0; # degrees
+  vzThresh = 5.0; # m/sec
   sAndL = 1;
   segIndex = 0;
   segments = {};
@@ -60,32 +72,41 @@ filtPitch = zeros(N,1);
   endUtc = 0;
   duration = 0;
   
-  for index = 1:size(ats)(1)
-    avgRoll += (1.0 - d) * (roll(index) - avgRoll);
-    avgPitch += (1.0 - d) * (pitch(index) - avgPitch);
+  index = 0;
+  for indexA = aStart:N-1
+    index += 1;
+    snl(index) = sAndL;
+    avgRoll += (1.0 - d) * (roll(indexA) - avgRoll);
+    avgVz += (1.0 - d) * (vz(index) - avgVz);
     filtRoll(index) = avgRoll;
-    filtPitch(index) = avgPitch;
+    filtVz(index) = avgVz;
 
     if (sAndL)
-      if (!slCheck(avgRoll, rollThresh, avgPitch, pitchThresh))     
+      if (!slCheck(avgRoll, rollThresh, avgVz, vzThresh))     
         # vehicle is no longer straight and level
         # check segment duration
         beginT = ats(slBegin);
         endT = ats(index);
         duration = endT - beginT;
-        #if segment longer than threshold
+        #if sAndL duration longer than threshold
         if (duration > sl_dur)
-          # record this segment and start a new one
+          # record this straight & level segment
           segIndex++;
           segments(segIndex) = [beginT, endT, duration, slBegin, index];
+          printf("end segment %d: duration: %5.2f\n", segIndex, duration);
+##          plot_att(slBegin,index,ATT,segIndex);
+##          plot_track2(slBegin,index,POS,segIndex+100);
         endif
+        # reset state
         sAndL = 0;
       endif
     else
-      if (!slCheck(avgRoll, rollThresh, avgPitch, pitchThresh))
+      if (slCheck(avgRoll, rollThresh, avgVz, vzThresh))
         # vehicle is now straight-and-level; remember index into input data arrays
         slBegin = index;
+        # set state
         sAndL = 1;
+        printf("start segment: roll: %5.2f, vz %5.2f\n", avgRoll, avgVz);
       endif
     endif
   endfor
@@ -95,16 +116,12 @@ filtPitch = zeros(N,1);
   beginT = ats(slBegin);
   endT = ats(index);
   duration = endT - beginT;
-  segments(++segIndex) = [beginT, endT, duration];
-  
-  figure();
-  plot(ats,filtRoll,ats,filtPitch);
-
+  segments(++segIndex) = [beginT, endT, duration, slBegin, index];
 endfunction
 
-function retval = slCheck(avgRoll, rollThresh, avgPitch, pitchThresh)
-    retval = ((abs(avgRoll) < rollThresh) || ((abs(avgRoll)-180) < rollThresh)) && ...
-                   (abs(avgPitch) < pitchThresh);
+function retval = slCheck(avgRoll, rollThresh, avgVz, vzThresh)
+    retval = ((abs(avgRoll) < rollThresh) || (abs(abs(avgRoll)-180) < rollThresh)) && ...
+                   (abs(avgVz) < vzThresh);
 endfunction
 
 # input is GPS week, msec
