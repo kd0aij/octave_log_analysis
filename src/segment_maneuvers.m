@@ -23,11 +23,14 @@
 ## Author: markw <markw@DESKTOP-AR9SD00>
 ## Created: 2018-06-18
 
-function segments = segment_maneuvers (sl_dur, p_lp, ATT, NKF1, POS)
+function segments = segment_maneuvers (sl_dur, p_lp, ATT, NKF1, POS, ...
+  rollThresh=15, vzThresh=5)
 # construct Nx2 matrix containing the start and end indices of
 # straight-and-level flight segments
 # default sl_dur is 3.0
 # default p_lp is 0.95
+# default rollThresh is 15 degrees
+# default  vzThresh is 5 m/sec
 # pos is the dataflash log POS record (default 25Hz)
 # att is the dataflash log ATT record (default 25Hz)
 
@@ -63,8 +66,6 @@ snl = zeros(N,1);
   avgRoll = 0;
   avgVz = 0;
   d = p_lp; # single-pole IIR low pass filter
-  rollThresh = 15.0; # degrees
-  vzThresh = 5.0; # m/sec
   sAndL = 1;
   segIndex = 0;
   segments = {};

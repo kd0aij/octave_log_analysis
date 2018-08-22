@@ -1,4 +1,5 @@
-function plot_track(index1, segments, POS, label='')
+function plot_track(index1, segments, POS, label='', boxCenter=[39.843,-105.2125])
+# boxCenter is the (lat,lon) of the box center  
 
 # it appears that GPS location is accurate when POS data starts
 pts = POS.data(:,1);
@@ -37,8 +38,8 @@ lon=POS.data(startIndex:endIndex,4);
 z = POS.data(startIndex:endIndex,5);
 
 # convert to meters from start position
-x=lon-POS.data(1,4);
-y=lat-POS.data(1,3);
+x=lon-boxCenter(2);
+y=lat-boxCenter(1);
 x=x*53*5280/3.28;
 y=y*69*5280/3.28;
 z -= 1808;

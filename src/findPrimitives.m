@@ -160,7 +160,7 @@ function [lines, arcs] = findPrimitives(ATT,POS,NKF1,IMU,vmin,tmin,rateMin,rateM
   endfor
   for i = 1:length(arcs)
     for j = arcs{i}(4):arcs{i}(5)
-      segType(j) = 2;
+      segType(j) += 2;
     endfor
   endfor
 
