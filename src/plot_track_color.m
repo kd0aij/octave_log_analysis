@@ -1,4 +1,4 @@
-function plot_track_color(index1, segments, POS, ATT, ...
+function plot_track_color(index1, segments, POS, ATT, IMU, ...
   label='', boxCenter=[39.843,-105.2125], levelThresh=15)
 
 # it appears that GPS location is NOT accurate when POS data starts
@@ -20,6 +20,7 @@ else
   endTime = segments{index1}(2);
 endif
 
-plot_tseg_color(startTime, endTime, POS, ATT, index1, label, boxCenter, levelThresh);
+plot_tseg_color(startTime, endTime, POS, ATT, IMU, index1, label, ...
+  boxCenter, levelThresh);
 
 endfunction

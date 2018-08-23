@@ -1,4 +1,4 @@
-function plot_tseg_color(startTime, endTime, POS, ATT, ...
+function plot_tseg_color(startTime, endTime, POS, ATT, IMU, ...
   fignum=1, label='', boxCenter=[39.843,-105.2125], levelThresh=15)
 
 # it appears that GPS location is NOT accurate when POS data starts
@@ -18,7 +18,7 @@ endwhile
 printf("POS start/end indices: %d, %d\n", startIndex, endIndex);
 
 # !!! assume ATT has same sample rate as POS
-# find sample offset from POS to ATT
+# find the record numbers for start and end times
 ats = ATT.data(:,1);
 s_ats = 1;
 while (ats(s_ats+1) < startTime)
@@ -32,6 +32,31 @@ endif
 
 e_ats = s_ats + endIndex - startIndex;
 printf("ATT start/end indices: %d, %d\n", s_ats, e_ats);
+
+# !!! assume IMU has twice the sample rate of POS
+# find the record numbers for start and end times
+its = IMU.data(:,1);
+s_its = 1;
+while (its(s_its+1) < startTime)
+  s_its += 1;
+endwhile
+e_its = s_its;
+while (its(e_its) < endTime)
+  e_its += 1;
+endwhile
+
+if abs(its(s_its) - startTime) > .05
+  printf("error: matching startTime not found in IMU\n");
+  return
+endif
+printf("IMU start/end indices: %d, %d\n", s_its, e_its);
+printf("IMU start/end times: %d, %d\n", its(s_its), its(e_its));
+
+# extract gyro rate vectors
+itsp = its(s_its:e_its);
+gx = IMU.data(s_its:e_its,3);
+gy = IMU.data(s_its:e_its,4);
+gz = IMU.data(s_its:e_its,5);
 
 lat=POS.data(startIndex:endIndex,3);
 lon=POS.data(startIndex:endIndex,4);
@@ -95,8 +120,9 @@ for i = 1:125:length(atsp)
   thacks = [thacks atsp(i)];
 endfor
 
+fignum
 figure(fignum, 'position', [100,100,800,800])
-subplot(2,3,1)
+subplot(2,2,1)
 c1=1;
 c2=2;
 scatter(xyzr(:,c1),xyzr(:,c2),sizes,colors,'filled')
@@ -108,7 +134,7 @@ title (sprintf("Plan view"))
 xlabel "east (m)"
 ylabel "north (m)"
 
-subplot(2,3,2)
+subplot(2,2,2)
 c1=1;
 c2=3;
 scatter(xyzr(:,1),xyzr(:,3),sizes,colors,'filled');
@@ -120,7 +146,7 @@ title (sprintf("North elevation"))
 xlabel "east (m)"
 ylabel "alt (m)"
 
-subplot(2,3,5)
+subplot(2,2,3)
 c1=2;
 c2=3;
 scatter(xyzr(:,2),xyzr(:,3),sizes,colors,'filled');
@@ -132,37 +158,7 @@ title (sprintf("East elevation"))
 xlabel "north (m)"
 ylabel "alt (m)"
 
-subplot(2,3,[3 6])
-plot(atsp, unwrap(roll,180), 'or', atsp, pitch, 'ok', atsp, yaw-180, 'om');
-limits=axis();
-xoffset = (limits(2)-limits(1))/(length(thacks)*4)
-yoffset = limits(3) + (limits(4)-limits(3))/40
-hold on
-for i = 1:length(thacks)
-  plot([thacks(i) thacks(i)],limits(3:4),'-b');
-  text(thacks(i)-xoffset,yoffset,num2str(i-1))
-endfor
-yGrid = [levelThresh 45 90 180-levelThresh 180];
-for i = 1:length(yGrid)
-  plot([limits(1) limits(2)],[-yGrid(i),-yGrid(i)],'-b');
-  plot([limits(1) limits(2)],[ yGrid(i), yGrid(i)],'-b');
-endfor
-xticks(thacks);
-xlabels={};
-for i=1:length(thacks)
-  xlabels(i) = sprintf("%4.1f",thacks(i));
-endfor
-xticklabels(xlabels);
-yticks([-yGrid yGrid]);
-axis tight
-grid off
-
-title (sprintf("(unwrapped roll), pitch, yaw"))
-xlabel "time"
-ylabel "degrees)"
-legend("roll","pitch","yaw")
-
-subplot(2,3,4)
+subplot(2,2,4)
 plot(atsp, roll, 'or', atsp, pitch, 'ok', atsp, yaw-180, 'om');
 limits=axis();
 xoffset = (limits(2)-limits(1))/(length(thacks)*4)
@@ -184,7 +180,7 @@ for i=1:length(thacks)
 endfor
 xticklabels(xlabels);
 yticks([-yGrid yGrid]);
-axis tight
+axis([atsp(1),atsp(end),limits(3),limits(4)])
 grid off
 
 title (sprintf("roll, pitch, yaw"))
@@ -193,6 +189,64 @@ ylabel "degrees)"
 legend("roll","pitch","yaw")
 
 print (sprintf("%s_maneuver_%d.jpg", label, fignum), "-S1080,1080")
+
+clf
+subplot(2,1,1)
+plot(atsp, unwrap(roll,180), 'or', atsp, unwrap(yaw-180,180), 'om', atsp, pitch, 'ok');
+limits=axis();
+xoffset = (limits(2)-limits(1))/(length(thacks)*4)
+yoffset = limits(3) + (limits(4)-limits(3))/40
+hold on
+for i = 1:length(thacks)
+  plot([thacks(i) thacks(i)],limits(3:4),'-b');
+  text(thacks(i)-xoffset,yoffset,num2str(i-1))
+endfor
+yGrid = [levelThresh 45 90 180-levelThresh 180];
+for i = 1:length(yGrid)
+  plot([limits(1) limits(2)],[-yGrid(i),-yGrid(i)],'-b');
+  plot([limits(1) limits(2)],[ yGrid(i), yGrid(i)],'-b');
+endfor
+xticks(thacks);
+xlabels={};
+for i=1:length(thacks)
+  xlabels(i) = sprintf("%4.1f",thacks(i));
+endfor
+xticklabels(xlabels);
+yticks([-yGrid yGrid]);
+axis([atsp(1),atsp(end),limits(3),limits(4)])
+grid off
+
+title (sprintf("(unwrapped roll), pitch, yaw"))
+xlabel "time"
+ylabel "degrees)"
+legend("roll","yaw","pitch")
+
+subplot(2,1,2)
+plot(itsp,gx,'-r',itsp,gz,'-m',itsp,gy,'-k')
+limits=axis();
+xoffset = (limits(2)-limits(1))/(length(thacks)*4)
+yoffset = limits(3) + (limits(4)-limits(3))/40
+hold on
+for i = 1:length(thacks)
+  plot([thacks(i) thacks(i)],limits(3:4),'-b');
+  text(thacks(i)-xoffset,yoffset,num2str(i-1))
+endfor
+xticks(thacks);
+xlabels={};
+for i=1:length(thacks)
+  xlabels(i) = sprintf("%4.1f",thacks(i));
+endfor
+xticklabels(xlabels);
+axis tight
+grid on
+
+title ("roll, pitch, yaw rates")
+xlabel "time"
+ylabel "rad/sec)"
+legend("roll","yaw","pitch")
+
+print (sprintf("%s_RPY_%d.jpg", label, fignum), "-S1920,960")
+
 endfunction
 
 function timeHacks(limits, xyzr, c1, c2, color)
@@ -200,7 +254,7 @@ function timeHacks(limits, xyzr, c1, c2, color)
   offset = (limits(4)-limits(3))/20;
   hackIndex = 0;
   for i = 1:125:length(xyzr)
-    scatter(xyzr(i,c1),xyzr(i,c2),[5],color)
+    scatter(xyzr(i,c1),xyzr(i,c2),[10],color)
     text(xyzr(i,c1)+offset,xyzr(i,c2)+offset,num2str(hackIndex))
     hackIndex += 1;
   endfor
