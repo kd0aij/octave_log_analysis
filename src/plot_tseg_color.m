@@ -222,7 +222,7 @@ ylabel "degrees)"
 legend("roll","yaw","pitch")
 
 subplot(2,1,2)
-plot(itsp,gx,'-r',itsp,gz,'-m',itsp,gy,'-k')
+plot(itsp,gx,'or',itsp,gz,'om',itsp,gy,'ok')
 limits=axis();
 xoffset = (limits(2)-limits(1))/(length(thacks)*4)
 yoffset = limits(3) + (limits(4)-limits(3))/40
@@ -237,7 +237,7 @@ for i=1:length(thacks)
   xlabels(i) = sprintf("%4.1f",thacks(i));
 endfor
 xticklabels(xlabels);
-axis tight
+axis([atsp(1),atsp(end),limits(3),limits(4)])
 grid on
 
 title ("roll, pitch, yaw rates")

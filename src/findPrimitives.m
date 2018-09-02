@@ -1,6 +1,7 @@
-function [lines, arcs] = findPrimitives(ATT,POS,NKF1,IMU,vmin,tmin,rateMin,rateMax,lpd=0.95)
-  # find straight line segments, parameterized by 3D line equation:
-  # P = alpha * v + O
+function [lines, arcs] = findPrimitives(ATT,POS,NKF1,IMU,...
+  vmin,tmin,rateMin,rateMax,lpd=0.95)
+  # find straight line segments parameterized by 3D line equation:
+  # P = alpha * v * dt + O
   # where P and O are [x,y,z] coord's, v is a 3D unit vector and alpha is
   # speed in m/sec
 
