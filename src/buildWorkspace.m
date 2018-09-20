@@ -5,7 +5,9 @@
 run temp.m
 
 # generate a workspace containing the desired data
-data = alignData(POS, ATT, IMU, NKF1, NKQ1);
+data = alignData(POS, GPS, ATT, IMU, NKF1, NKQ1);
 
 # and save to temp.work
-save 'temp.work' data
+save 'temp.work'
+
+segments = segment_maneuvers2(2, 0, data);

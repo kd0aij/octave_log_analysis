@@ -1,11 +1,21 @@
 function plot_tseg_color2(startTime, endTime, data, ...
-  fignum=1, label='', boxCenter=[39.843,-105.2125], levelThresh=15)
-
+  fignum=1, label='', origin=[39.8420194 -105.2123333 1808], levelThresh=15, posIndex=2)
+  
 # data contains fields: 
 #         1    2    3    4     5      6    7
 # timestamp, Lat, Lng, Alt, Roll, Pitch, Yaw,  
+
 #    8     9    10    11    12    13  14  15  16
 # GyrX, GyrY, GyrZ, AccX, AccY, AccZ, VE, VN, VD
+
+# 17:20, 21, 22, 23
+# Q1-4,   R,  P,  Y (corrected Euler angles "fixed xyz")
+
+#  24,  25,  26
+# Lat, Lng, Alt (GPS based)
+
+# posIndex defaults to 2 for POS based Lat,Lng,Alt
+# if those are in error, set posIndex to 24 to fall back to GPS samples
 
 # it appears that GPS location is NOT accurate when POS data starts
 # skip the first 30 seconds of data
@@ -28,17 +38,20 @@ tsp = ts(startIndex:endIndex);
 gx = data(startIndex:endIndex,8);
 gy = data(startIndex:endIndex,9);
 gz = data(startIndex:endIndex,10);
+##[gx gy gz] = data(startIndex:endIndex,8:10);
 
-lat=data(startIndex:endIndex,2);
-lon=data(startIndex:endIndex,3);
-z = data(startIndex:endIndex,4);
+lat=data(startIndex:endIndex,posIndex);
+lon=data(startIndex:endIndex,posIndex+1);
+z = data(startIndex:endIndex,posIndex+2);
+##[lat lon z] = data(startIndex:endIndex,posIndex:posIndex+2);
 
 # convert to meters from start position
-x=lon-boxCenter(2);
-y=lat-boxCenter(1);
+#TODO: fix this; use code from kmlcreator
+x=lon-origin(2);
+y=lat-origin(1);
 x=x*53*5280/3.28;
 y=y*69*5280/3.28;
-z -= 1808;
+z -= origin(3);
 
 # rotate parallel to runway
 a=16*(pi/180);
@@ -46,13 +59,20 @@ xyzr=[cos(a)*x.-sin(a)*y, sin(a)*x.+cos(a)*y, z];
 
 # assign colors representing roll angle
 # roll range is (-180,180] degrees
-roll  = data(startIndex:endIndex,5);
-pitch = data(startIndex:endIndex,6);
-yaw   = data(startIndex:endIndex,7);
-# convert yaw from [0,360] to [-180,180] (with North at 0)
+##roll  = data(startIndex:endIndex,5);
+##pitch = data(startIndex:endIndex,6);
+##yaw   = data(startIndex:endIndex,7);
+roll  = data(startIndex:endIndex,24);
+pitch = data(startIndex:endIndex,25);
+yaw   = data(startIndex:endIndex,26);
+
+# convert hdg from [0,360] (positive CW) to 
+# [180,-180] (positive CCW) (with North at 0)
 for i = 1:length(yaw)
-  if yaw > 180
-    yaw = yaw - 360;
+  if yaw(i) > 180
+    yaw(i) = 360 - yaw(i);
+  else
+    yaw(i) = -yaw(i);
   endif
 endfor
 
@@ -60,7 +80,7 @@ colors = ones(length(roll),3);
 red = hsv2rgb([0,1,1]);
 yellow = hsv2rgb([.13,1,1]);
 green = hsv2rgb([.25,1,1]);
-greeni = hsv2rgb([.3,1,1]);
+greeni = hsv2rgb([.25,1,.8]);
 blue = hsv2rgb([.60,1,1]);
 magenta = [1,0,1];
 
@@ -69,6 +89,9 @@ for i = 1:length(colors)
     # level
     colors(i,:) = green;
   elseif abs(roll(i)-180) < levelThresh
+    # inverted
+    colors(i,:) = greeni;
+  elseif abs(roll(i)+180) < levelThresh
     # inverted
     colors(i,:) = greeni;
   elseif abs(roll(i)-90) < levelThresh
@@ -81,7 +104,6 @@ for i = 1:length(colors)
     colors(i,:) = red;
   endif
 endfor
-#colors = hsv2rgb(colors);
 sizes = 10 * ones(length(colors),1);
 
 # plot 5 second time intervals
@@ -93,46 +115,28 @@ endfor
 fignum
 figure(fignum, 'position', [100,100,800,800])
 subplot(2,2,1)
-c1=1;
-c2=2;
-scatter(xyzr(:,c1),xyzr(:,c2),sizes,colors,'filled')
-axis equal
-limits = axis();
-timeHacks(limits, xyzr, c1, c2, blue);
-grid on
+scatterPlot(xyzr, 1, 2, sizes, colors, blue, [-350 350])
 title (sprintf("Plan view"))
 xlabel "east (m)"
 ylabel "north (m)"
 
 subplot(2,2,2)
-c1=1;
-c2=3;
-scatter(xyzr(:,1),xyzr(:,3),sizes,colors,'filled');
-axis equal
-limits = axis();
-timeHacks(limits, xyzr, c1, c2, blue);
-grid on
+scatterPlot(xyzr, 1, 3, sizes, colors, blue, [-350 350])
 title (sprintf("North elevation"))
 xlabel "east (m)"
 ylabel "alt (m)"
 
 subplot(2,2,3)
-c1=2;
-c2=3;
-scatter(xyzr(:,2),xyzr(:,3),sizes,colors,'filled');
-axis equal
-limits = axis();
-timeHacks(limits, xyzr, c1, c2, blue);
-grid on
+scatterPlot(xyzr, 2, 3, sizes, colors, blue, [0 400])
 title (sprintf("East elevation"))
 xlabel "north (m)"
 ylabel "alt (m)"
 
 subplot(2,2,4)
-plot(tsp, roll, 'or', tsp, pitch, 'ok', tsp, yaw-180, 'om');
+plot(tsp, roll, 'or', tsp, pitch, 'ok', tsp, yaw, 'om');
 limits=axis();
-xoffset = (limits(2)-limits(1))/(length(thacks)*4)
-yoffset = limits(3) + (limits(4)-limits(3))/40
+xoffset = (limits(2)-limits(1))/(length(thacks)*4);
+yoffset = limits(3) + (limits(4)-limits(3))/40;
 hold on
 for i = 1:length(thacks)
   plot([thacks(i) thacks(i)],limits(3:4),'-b');
@@ -158,14 +162,13 @@ xlabel "time"
 ylabel "degrees)"
 legend("roll","pitch","yaw")
 
-print (sprintf("%s_maneuver_%d.jpg", label, fignum), "-S1080,1080")
-
-figure(fignum+1, 'position', [200,200,800,800])
+figure(fignum+1, 'position', [900,100,800,800])
 subplot(2,1,1)
-plot(tsp, unwrap(roll,180), '.r', tsp, unwrap(yaw-180,180), '.m', tsp, pitch, '.k');
+##plot(tsp, unwrap(roll,180), 'o-r', tsp, pitch, 'o-k', tsp, unwrap(yaw,180), 'o-m');
+plot(tsp, roll, 'o-r', tsp, pitch, 'o-k', tsp, yaw, 'o-m');
 limits=axis();
-xoffset = (limits(2)-limits(1))/(length(thacks)*4)
-yoffset = limits(3) + (limits(4)-limits(3))/40
+xoffset = (limits(2)-limits(1))/(length(thacks)*4);
+yoffset = limits(3) + (limits(4)-limits(3))/40;
 hold on
 for i = 1:length(thacks)
   plot([thacks(i) thacks(i)],limits(3:4),'-b');
@@ -192,16 +195,17 @@ yticks(yTicks);
 axis([tsp(1),tsp(end),limits(3),limits(4)])
 grid off
 
-title (sprintf("(unwrapped roll), pitch, yaw"))
+##title (sprintf("unwrapped roll, pitch, unwrapped yaw"))
+title (sprintf("roll, pitch, yaw"))
 xlabel "time"
 ylabel "degrees)"
-legend("roll","yaw","pitch")
+legend("roll","pitch","yaw")
 
 subplot(2,1,2)
-plot(tsp,rad2deg(gx),'or',tsp,rad2deg(gz),'om',tsp,rad2deg(gy),'ok')
+plot(tsp,rad2deg(gx),'or',tsp,rad2deg(gy),'ok',tsp,rad2deg(gz),'om')
 limits=axis();
-xoffset = (limits(2)-limits(1))/(length(thacks)*4)
-yoffset = limits(3) + (limits(4)-limits(3))/40
+xoffset = (limits(2)-limits(1))/(length(thacks)*4);
+yoffset = limits(3) + (limits(4)-limits(3))/40;
 hold on
 for i = 1:length(thacks)
   plot([thacks(i) thacks(i)],limits(3:4),'-b');
@@ -219,9 +223,13 @@ grid on
 title ("roll, pitch, yaw rates")
 xlabel "time"
 ylabel "deg/sec)"
-legend("roll","yaw","pitch")
+legend("roll","pitch","yaw")
 
-print (sprintf("%s_RPY_%d.jpg", label, fignum), "-S1920,960")
+print (sprintf("%s_RPY_%d.jpg", label, fignum), "-S1080,540")
+
+figure(fignum)
+print (sprintf("%s_maneuver_%d.jpg", label, fignum), "-S800,800")
+
 
 endfunction
 
@@ -237,29 +245,11 @@ function timeHacks(limits, xyzr, c1, c2, color)
   hold off  
 endfunction
 
-##scatter3(xyzr(:,1),xyzr(:,2),xyzr(:,3),sizes,colors,'filled')
-##hold on
-##scatter3(xyzr(1,1),xyzr(1,2),xyzr(1,3),[20],[0,0,0],'filled')
-##hold off
-##
-##axis equal
-##grid on
-##title (sprintf("3D view", label))
-##xlabel "east (m)"
-##ylabel "north (m)"
-##zlabel "alt (m)"
-##print (sprintf("%s_maneuver_%d.jpg", label, index1))
-##scatter3(xyzr(:,1),xyzr(:,2),xyzr(:,3),sizes,colors,'filled')
-##hold on
-##scatter3(xyzr(1,1),xyzr(1,2),xyzr(1,3),[20],[0,0,0],'filled')
-##hold off
-##
-##xlabel('x')
-##ylabel("y")
-##zlabel("z")
-##axis equal
-##grid on
-##title (sprintf("3D view", label))
-##xlabel "east (m)"
-##ylabel "north (m)"
-##zlabel "alt (m)"
+function scatterPlot(xyzr, c1, c2, sizes, colors, color, xlim)
+  scatter(xyzr(:,c1),xyzr(:,c2),sizes,colors,'filled')
+  axis equal
+  axis(xlim)
+  limits = axis();
+  timeHacks(limits, xyzr, c1, c2, color);
+  grid on
+endfunction

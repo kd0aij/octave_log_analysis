@@ -1,46 +1,41 @@
-function [lines, arcs] = findPrimitives(ATT,POS,NKF1,IMU,...
-  vmin,tmin,rateMin,rateMax,lpd=0.95)
+function [lines, arcs] = findPrimitives(data,...
+  vmin,tmin,rateMin,rateMax,lpd=0.95,origin=[39.8420194 -105.2123333 1808],
+  pilotNorth=16*(pi/180))
   # find straight line segments parameterized by 3D line equation:
   # P = alpha * v * dt + O
   # where P and O are [x,y,z] coord's, v is a 3D unit vector and alpha is
   # speed in m/sec
 
-  # Input POS contains timestamp, latitude, longitude and altitude in meters
-  # Input GPS is used to determine when locations in POS are valid
+  # Input data contains columns:
+  # 1)timestamp, 
+  # 2:4)Lat, Lng, Alt, 
+  # 5:7)Roll, Pitch, Yaw, 
+  # 8:10)GyrX, GyrY, GyrZ, 
+  # 11:13)AccX, AccY, AccZ, 
+  # 14:16)VE, VN, VD, 
+  # 17:20)Q1-4, 
+  # 21:23)(raw GPS)Lat, Lng, Alt, (sample-replicated from 5Hz to 25Hz)
+  # 24:26)(corrected Euler)Roll, Pitch, Yaw
+  
   # Input vmin sets minimum line/arc speed
   # Input tmin sets minimum duration
   # Input rateMin is the minimum body rotation rate which differentiates arcs from lines
   # Input rateMax is the body rotation rate which differentiates snaps/spins from arcs
   
   # convert lat/lon/alt to xyz with x axis parallel to runway
-  # AAM east field runway elevation is 1808m
-  xyz = lla2xyz(POS, 16*(pi/180), 1808);  
+  # AAM east field runway elevation is 1808m, pilot station faces 16 degrees
+  # east of true north
+  POS = data(:,2:4);
+  xyz = lla2xyz(POS, pilotNorth, origin);  
   
-  # calculate sample rate in Hertz, and set minimum speed to 5 m/sec
-  pts = POS.data(:,1);
-  dt = 0;
-  M = 1000;
-  for i = 1:M
-    dt += pts(i+1) - pts(i);
-  endfor
-  dt = round(dt) / M
-  
-  Nmin = tmin / dt
-  lmin = tmin * vmin
-  
-  # it appears that GPS location is accurate when POS data starts
+  pts = data(:,1);
   startTime = pts(1);
 
   # find candidate segments based on speed and gyro rates
-  nts = NKF1.data(:,1);
-  vel = NKF1.data(:,6:8);
+  vel = data(:,14:16);
   speed = vecnorm(vel,2,2);
-##  yaw = NKF1.data(:,5);
-##  uyaw = unwrap(yaw-180,180);
-##  dyaw = diff(uyaw);
   
-  its = IMU.data(:,1);
-  gv = (180/3.1416)*IMU.data(:,3:5);
+  gv = (180/pi)*data(:,8:10);
   gv_mag = vecnorm(gv,2,2);
   
   # lowpass filter the gyro magnitude 
@@ -51,52 +46,24 @@ function [lines, arcs] = findPrimitives(ATT,POS,NKF1,IMU,...
     avg_mag(i) = avg;
   endfor
   
-  idt = 0;
-  M = 1000;
-  for i = 1:M
-    idt += its(i+1) - its(i);
-  endfor
-  idt = round(idt) / M
-  istep = dt / idt
-
-  ats = ATT.data(:,1);
-  roll = ATT.data(:,4);
-  pitch = ATT.data(:,6);
-  yaw = ATT.data(:,8);
+  roll = data(:,5);
+  pitch = data(:,6);
+  yaw = data(:,7);
   
-  # find the record numbers for start time
-  s_its = 1;
-  while (its(s_its+1) < startTime)
-    s_its += 1;
-  endwhile
-  l_its = length(its) - s_its
-
-  s_ats = 1;
-  while (ats(s_ats+1) < startTime)
-    s_ats += 1;
-  endwhile
-  l_ats = length(ats) - s_ats
-
-  s_nts = 1;
-  while (nts(s_nts+1) < startTime)
-    s_nts += 1;
-  endwhile
-  l_nts = length(nts) - s_nts
-
-  N = min(floor(l_its/istep), l_ats)
+  N = length(data);
   segType = zeros(N,1);
   tBegin = startTime;
   
   steady = 0;
   lines = {};
   segIndex = 0;
-  for index = 0:N-1
+  for index = 1:N
     if (steady)
-      if (!steadyCheck(speed(s_nts+index), vmin, avg_mag(s_its+(istep*index)), rateMin))     
+      if (!steadyCheck(speed(index), vmin, avg_mag(index), rateMin))     
         # vehicle is no longer in steady cruise
         # check segment duration
-        beginT = ats(slBegin);
-        endT = ats(index);
+        beginT = pts(slBegin);
+        endT = pts(index);
         duration = endT - beginT;
         #if steady duration longer than threshold
         if (duration > tmin)
@@ -104,13 +71,13 @@ function [lines, arcs] = findPrimitives(ATT,POS,NKF1,IMU,...
           segIndex++;
           lines{segIndex} = [beginT, endT, duration, slBegin, index];
           printf("end segment %d: duration: %5.2f\n", segIndex, duration);
-          plot_track2(slBegin,index,POS,1);
+          plot_track4(slBegin,index,xyz,1);
         endif
         # reset state
         steady = 0;
       endif
     else
-      if (steadyCheck(speed(s_nts+index), vmin, avg_mag(s_its+(istep*index)), rateMin))
+      if (steadyCheck(speed(index), vmin, avg_mag(index), rateMin))
         # vehicle is now in steady cruise; remember index into input data arrays
         slBegin = index;
         # set state
@@ -123,13 +90,13 @@ function [lines, arcs] = findPrimitives(ATT,POS,NKF1,IMU,...
   arc = 0;
   arcs = {};
   segIndex = 0;
-  for index = 0:N-1
+  for index = 1:N
     if (arc)
-      if (!arcCheck(speed(s_nts+index), vmin, avg_mag(s_its+(istep*index)), rateMin/2, rateMax))     
+      if (!arcCheck(speed(index), vmin, avg_mag(index), rateMin/2, rateMax))     
         # vehicle is no longer in arc
         # check segment duration
-        beginT = ats(slBegin);
-        endT = ats(index);
+        beginT = pts(slBegin);
+        endT = pts(index);
         duration = endT - beginT;
         #if arc duration longer than threshold
         if (duration > tmin)
@@ -137,13 +104,13 @@ function [lines, arcs] = findPrimitives(ATT,POS,NKF1,IMU,...
           segIndex++;
           arcs(segIndex) = [beginT, endT, duration, slBegin, index];
           printf("end segment %d: duration: %5.2f\n", segIndex, duration);
-          plot_track2(slBegin,index,POS,1);
+          plot_track4(slBegin,index,xyz,1);
         endif
         # reset state
         arc = 0;
       endif
     else
-      if (arcCheck(speed(s_nts+index), vmin, avg_mag(s_its+(istep*index)), rateMin, rateMax))
+      if (arcCheck(speed(index), vmin, avg_mag(index), rateMin, rateMax))
         # vehicle is now in arc; remember index into input data arrays
         slBegin = index;
         # set state
@@ -154,11 +121,16 @@ function [lines, arcs] = findPrimitives(ATT,POS,NKF1,IMU,...
   endfor
   
   printf("%d lines, %d arcs\n",length(lines), length(arcs));
+
+  # type will be zero if neither steady nor arc, 3 if both
+  # snap roll should be type zero
+  # "steady cruise" is type 1: set bit 0
   for i = 1:length(lines)
     for j = lines{i}(4):lines{i}(5)
       segType(j) = 1;
     endfor
   endfor
+  # set bit two for arc
   for i = 1:length(arcs)
     for j = arcs{i}(4):arcs{i}(5)
       segType(j) += 2;
@@ -167,7 +139,7 @@ function [lines, arcs] = findPrimitives(ATT,POS,NKF1,IMU,...
 
 
   figure(2)
-  plot(pts,segType,nts,speed,its,avg_mag)  
+  plot(pts,segType,pts,speed,pts,avg_mag)  
   legend('type','speed','rate')
   
 endfunction
