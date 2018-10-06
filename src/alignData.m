@@ -115,9 +115,9 @@ for i=1:Nsamp
     avgYaw += .05 * (yaw - avgYaw);
   endif
   [r p y] = attFromQuat(res(i,17:20), avgYaw, vThresh);
-##  if (t > 298) && (t < 303)
-##    printf("%5.3f: avgYaw: %5.3f, roll: %5.3f, pitch: %5.3f, yaw: %5.3f\n", t, avgYaw, r, p, y);
-##  endif
+  if (t > 385) && (t < 386)
+    printf("%5.3f: avgYaw: %5.3f, roll: %5.3f, pitch: %5.3f, yaw: %5.3f\n", t, avgYaw, r, p, y);
+  endif
   res(i,24:26) = [r p y];
 endfor
 

@@ -29,7 +29,9 @@ function [roll, pitch, yaw] = attFromQuat(q, avgYaw, pthresh)
     endif
      
     # corrected roll = actual roll - avgYaw
-    roll = rad2deg(act_roll) - avgYaw;
+    roll = rad2deg(act_roll); # - avgYaw;
+    
+    # wrap roll to [-180,180] degrees
     roll = wrap(roll);
     yaw = avgYaw;
 ##    printf("roll: %5.3f, pitch: %5.3f, yaw: %5.3f\n", roll, pitch, yaw);
