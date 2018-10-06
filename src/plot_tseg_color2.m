@@ -164,8 +164,8 @@ legend("roll","pitch","yaw")
 
 figure(fignum+1, 'position', [900,100,800,800])
 subplot(2,1,1)
-##plot(tsp, unwrap(roll,180), 'o-r', tsp, pitch, 'o-k', tsp, unwrap(yaw,180), 'o-m');
-plot(tsp, roll, 'o-r', tsp, pitch, 'o-k', tsp, yaw, 'o-m');
+plot(tsp, (180/pi)*unwrap(roll*pi/180), 'o-r', tsp, pitch, 'o-k', tsp, (180/pi)*unwrap(yaw*pi/180), 'o-m');
+##plot(tsp, roll, 'o-r', tsp, pitch, 'o-k', tsp, yaw, 'o-m');
 limits=axis();
 xoffset = (limits(2)-limits(1))/(length(thacks)*4);
 yoffset = limits(3) + (limits(4)-limits(3))/40;

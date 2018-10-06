@@ -142,6 +142,12 @@ function [lines, arcs] = findPrimitives(data,...
   plot(pts,segType,pts,speed,pts,avg_mag)  
   legend('type','speed','rate')
   
+  # fit a 3D line to each line segment
+  # P = alpha * v * dt + O
+  # O=xyz(lines{i}(4)
+  # linsolve A*x=b where b is the Nx3 matrix of xyz(lines{i}(4):lines{i}(5),:)
+  # and A is 
+  
 endfunction
 
 function retval = steadyCheck(speed, speedThresh, gv_mag, rateThresh)

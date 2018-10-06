@@ -12,20 +12,26 @@ function [roll, pitch, yaw] = attFromQuat(q, avgYaw, pthresh)
   # +/-90 and avgYaw, respectively...
   # Assume that pitch angles > pthresh degrees are verticals, and force
   # yaw to avgYaw
+  # When vertical, both roll and yaw act on the earth Z axis, so with yaw forced
+  # to avgYaw, calculate roll such that corrected roll + avgYaw = actual roll
   if abs(pitch) > pthresh
+    # project body Y axis to earth xy plane to get roll angle
     quat = quaternion(q(1),q(2),q(3),q(4));
-    noseup = sign(pitch);
-    
-    # compute roll angle by projecting body-frame Y axis to earth X-Y plane
-    # second column is Y axis w.r.t. Earth frame
-    [axis, theta] = q2rot(unit(quat));
+    [axis, theta] = q2rot(inv(unit(quat)));
     rmat = rotv(axis', theta);
-    rmat = rmat';
     y_x = rmat(1,2);
     y_y = rmat(2,2);
-    roll = -rad2deg(atan2(y_x, y_y)) - avgYaw;
-    roll = hdg2angle(roll);
+    act_roll = -atan2(y_y, y_x);
+    
+    # direction of z axis flips on downline?
+    if pitch < 0
+      act_roll = -act_roll;
+    endif
+     
+    # corrected roll = actual roll - avgYaw
+    roll = rad2deg(act_roll) - avgYaw;
+    roll = wrap(roll);
     yaw = avgYaw;
-##    printf("2) roll: %5.3f, pitch: %5.3f, yaw: %5.3f\n", roll, pitch, yaw);
+##    printf("roll: %5.3f, pitch: %5.3f, yaw: %5.3f\n", roll, pitch, yaw);
   endif
 endfunction

@@ -104,16 +104,20 @@ endwhile
 # corrected Euler RPY
 # handle Euler roll/yaw indeterminacy on vertical lines
 # convert quaternion to Euler angles; pitch threshold for vertical is 60 degrees 
-avgYaw = hdg2angle(res(1,7));
+avgYaw = hdg2yaw(res(1,7));
 vThresh = 60;
 for i=1:Nsamp
+  t = res(i,1);
   # track average yaw while abs(pitch) < vThresh
   pitch = res(i,6);
-  yaw = hdg2angle(res(i,7));
-  if abs(pitch < vThresh)
+  yaw = hdg2yaw(res(i,7));
+  if abs(pitch) < vThresh
     avgYaw += .05 * (yaw - avgYaw);
   endif
   [r p y] = attFromQuat(res(i,17:20), avgYaw, vThresh);
+##  if (t > 298) && (t < 303)
+##    printf("%5.3f: avgYaw: %5.3f, roll: %5.3f, pitch: %5.3f, yaw: %5.3f\n", t, avgYaw, r, p, y);
+##  endif
   res(i,24:26) = [r p y];
 endfor
 
