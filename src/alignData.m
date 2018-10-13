@@ -105,14 +105,14 @@ endwhile
 # handle Euler roll/yaw indeterminacy on vertical lines
 # convert quaternion to Euler angles; pitch threshold for vertical is 60 degrees 
 avgYaw = hdg2yaw(res(1,7));
-vThresh = 60;
+vThresh = 85;
 for i=1:Nsamp
   t = res(i,1);
   # track average yaw while abs(pitch) < vThresh
   pitch = res(i,6);
   yaw = hdg2yaw(res(i,7));
   if abs(pitch) < vThresh
-    avgYaw += .05 * (yaw - avgYaw);
+    avgYaw += .2 * (yaw - avgYaw);
   endif
   [r p y] = attFromQuat(res(i,17:20), avgYaw, vThresh);
   if (t > 385) && (t < 386)

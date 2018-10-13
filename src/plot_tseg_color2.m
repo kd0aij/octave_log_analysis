@@ -1,5 +1,6 @@
 function plot_tseg_color2(startTime, endTime, data, ...
-  fignum=1, label='', origin=[39.8420194 -105.2123333 1808], levelThresh=15, posIndex=2)
+  fignum=1, label='', origin=[39.8420194 -105.2123333 1808], 
+  levelThresh=15, posIndex=2, runwayNorth=16)
   
 # data contains fields: 
 #         1    2    3    4     5      6    7
@@ -54,7 +55,7 @@ y=y*69*5280/3.28;
 z -= origin(3);
 
 # rotate parallel to runway
-a=16*(pi/180);
+a=runwayNorth*(pi/180);
 xyzr=[cos(a)*x.-sin(a)*y, sin(a)*x.+cos(a)*y, z];
 
 # assign colors representing roll angle
@@ -116,7 +117,7 @@ fignum
 figure(fignum, 'position', [100,100,800,800])
 subplot(2,2,1)
 scatterPlot(xyzr, 1, 2, sizes, colors, blue, [-350 350])
-title (sprintf("Plan view"))
+title (sprintf("roll tolerance %d degrees\nPlan view", levelThresh))
 xlabel "east (m)"
 ylabel "north (m)"
 
@@ -127,13 +128,14 @@ xlabel "east (m)"
 ylabel "alt (m)"
 
 subplot(2,2,3)
-scatterPlot(xyzr, 2, 3, sizes, colors, blue, [0 400])
+scatter(xyzr(:,2),xyzr(:,3),sizes,colors,'filled')
+##scatterPlot(xyzr, 2, 3, sizes, colors, blue, [0 700])
 title (sprintf("East elevation"))
 xlabel "north (m)"
 ylabel "alt (m)"
 
 subplot(2,2,4)
-plot(tsp, roll, 'or', tsp, pitch, 'ok', tsp, yaw, 'om');
+plot(tsp, roll, 'or', tsp, pitch, '.-k', tsp, yaw, 'om');
 limits=axis();
 xoffset = (limits(2)-limits(1))/(length(thacks)*4);
 yoffset = limits(3) + (limits(4)-limits(3))/40;
@@ -164,7 +166,7 @@ legend("roll","pitch","yaw")
 
 figure(fignum+1, 'position', [900,100,800,800])
 subplot(2,1,1)
-plot(tsp, (180/pi)*unwrap(roll*pi/180), 'o-r', tsp, pitch, 'o-k', tsp, (180/pi)*unwrap(yaw*pi/180), 'o-m');
+plot(tsp, (180/pi)*unwrap(roll*pi/180), '.-r', tsp, pitch, '.-k', tsp, (180/pi)*unwrap(yaw*pi/180), '.-m');
 ##plot(tsp, roll, 'o-r', tsp, pitch, 'o-k', tsp, yaw, 'o-m');
 limits=axis();
 xoffset = (limits(2)-limits(1))/(length(thacks)*4);
@@ -183,7 +185,7 @@ xticklabels(xlabels);
 yoff = 180*round(limits(3) / 180);
 nwraps = round((limits(4)-limits(3)) / 180);
 yTicks = [];
-yGrid = [levelThresh 45 90 180-levelThresh 180];
+yGrid = [levelThresh 45 90 180-levelThresh 180+levelThresh 270-levelThresh 270+levelThresh ];
 for w = 1:nwraps
   for i = 1:length(yGrid)
     plot([limits(1) limits(2)],[ yoff+yGrid(i), yoff+yGrid(i)],'-b');
@@ -195,14 +197,14 @@ yticks(yTicks);
 axis([tsp(1),tsp(end),limits(3),limits(4)])
 grid off
 
-##title (sprintf("unwrapped roll, pitch, unwrapped yaw"))
-title (sprintf("roll, pitch, yaw"))
+title (sprintf("unwrapped roll, pitch, unwrapped yaw"))
+##title (sprintf("roll, pitch, yaw"))
 xlabel "time"
 ylabel "degrees)"
 legend("roll","pitch","yaw")
 
 subplot(2,1,2)
-plot(tsp,rad2deg(gx),'or',tsp,rad2deg(gy),'ok',tsp,rad2deg(gz),'om')
+plot(tsp,rad2deg(gx),'.-r',tsp,rad2deg(gy),'.-k',tsp,rad2deg(gz),'.-m')
 limits=axis();
 xoffset = (limits(2)-limits(1))/(length(thacks)*4);
 yoffset = limits(3) + (limits(4)-limits(3))/40;
@@ -226,10 +228,11 @@ ylabel "deg/sec)"
 legend("roll","pitch","yaw")
 
 print (sprintf("%s_RPY_%d.jpg", label, fignum), "-S1080,540")
+hgsave (sprintf("%s_RPY_%d.ofig", label, fignum))
 
 figure(fignum)
 print (sprintf("%s_maneuver_%d.jpg", label, fignum), "-S800,800")
-
+hgsave (sprintf("%s_maneuver_%d.ofig", label, fignum))
 
 endfunction
 
