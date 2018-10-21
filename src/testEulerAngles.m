@@ -55,7 +55,7 @@ switch (maneuver)
       gx = 0;
       pitch = 90 + theta;
       gy = deg2rad(1) / dt;
-      yaw = 40;
+      yaw = 0;
       gz = 0;
       xp = radius * cos(deg2rad(theta));
       yp = 0;
@@ -72,7 +72,7 @@ switch (maneuver)
       gx = deg2rad(1) / dt;
       pitch = 90 + theta;
       gy = deg2rad(1) / dt;
-      yaw = 40;
+      yaw = 0;
       gz = 0;
       xp = radius * cos(deg2rad(theta));
       yp = 0;
@@ -101,7 +101,7 @@ switch (maneuver)
       endif
       pitch = 90 + theta;
       gy = deg2rad(1) / dt;
-      yaw = 0;
+      yaw = 45;
       gz = 0;
       xp = radius * cos(deg2rad(theta));
       yp = 0;

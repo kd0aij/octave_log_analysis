@@ -17,7 +17,7 @@ function [r, p, y] = attFromQuat(q, avgYaw, pthresh)
   if abs(p) > pthresh
     quat = quaternion(q(1),q(2),q(3),q(4));
     
-    printf("roll: %5.3f, pitch: %5.3f, yaw: %5.3f, avgYaw: %5.3f\n", r, p, y, avgYaw);
+##    printf(" roll: %5.3f, pitch: %5.3f, yaw: %5.3f, avgYaw: %5.3f\n", r, p, y, avgYaw);
       
     # remove avgYaw
     aq = inv(rot2q([0,0,1],deg2rad(avgYaw))) * quat;
@@ -30,7 +30,7 @@ function [r, p, y] = attFromQuat(q, avgYaw, pthresh)
     endif
     r = wrap180(rad2deg(thetar));
     y = avgYaw;
-    printf("corrected roll: %5.3f, pitch: %5.3f, yaw: %5.3f\n", r, p, y);
-      
+##    printf("croll: %5.3f, pitch: %5.3f, yaw: %5.3f\n", r, p, y);
+   
   endif
 endfunction
