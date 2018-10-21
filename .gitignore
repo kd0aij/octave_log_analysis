@@ -1,0 +1,6 @@
+*.work
+.project
+.cproject
+*.ofig
+*.jpg
+
