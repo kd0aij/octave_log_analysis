@@ -28,7 +28,7 @@ function [r, p, y] = attFromQuat(q, avgYaw, pthresh)
     if p < 0
       thetar *= -1;
     endif
-    r = wrap(rad2deg(thetar));
+    r = wrap180(rad2deg(thetar));
     y = avgYaw;
     printf("corrected roll: %5.3f, pitch: %5.3f, yaw: %5.3f\n", r, p, y);
       
