@@ -1,5 +1,5 @@
 function plot_track_color(index1, segments, data, ...
-  label='', origin=[39.8420194 -105.2123333 1808], levelThresh=15, posIndex=2)
+  label='', origin=[39.8420194 -105.2123333 1808], levelThresh=10)
   
 # default origin is west pilot station
 # pilot station east:  39°50'31.27"N 105°12'44.40"W  39.8420194 -105.2123333

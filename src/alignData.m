@@ -127,6 +127,9 @@ function dt = getSampleInterval(pts)
   # calculate sample interval
   dt = 0;
   M = 1000;
+  if length(pts) < M
+    M = length(pts);
+  endif
   dt = pts(M) - pts(1);
   dt = round(dt) / M;
 endfunction
