@@ -37,11 +37,12 @@ res = [];
 
 vThresh = 85;
 noise = 5; # degrees
+rhdg = 45; # runway heading
 
 # straight and level entry
 s = 15;
 T = 3;
-hdg = 16;
+hdg = rhdg;
 xp = -s * T * cosd(hdg);
 yp = -s * T * sind(hdg);
 zp = alt + 30;
@@ -60,20 +61,20 @@ switch (maneuver)
     # simulate pass by reference into writeRes
     data = zeros(Nsamp, 26);
     roll = 0;
-    hdg = 0;
     gx = 0;
     gz = 0;
-    yp = y+180;
     theta = initTheta;
     for i = 1:Nsamp
       pitch = 90 + theta;
-      xp = x + radius * cos(deg2rad(theta));
+      dxy = radius * cosd(theta);
+      xp = x + dxy * cosd(hdg);
+      yp = y + dxy * sind(hdg);
       zp = z + radius + radius * sin(deg2rad(theta));  
       writeRes(i, noise, vThresh, ...
                roll, pitch, hdg, gx, gy, gz, xp, yp, zp);
       theta += rad2deg(dtheta);
     endfor
-    hdg = 180;  # heading is reversed at exit
+    hdg += 180;  # heading is reversed at exit
   case 'loop'
     # speed s in m/sec
     # gy in rad/sec (pitch rate)
@@ -161,10 +162,16 @@ res = [res; data];
 s = 15;
 T = 3;
 [x y z data] = straight_level(xp, yp, zp, hdg, s, T);
+
+figure(3)
+xyzr = lla2xyz(res(:,2:4), 0,[39.8420194 -105.2123333 1808]);
+plot3Dline(xyzr);
+
 res = [res; data];
 
-##figure(3)
-##plot3Dline(res(:,
+figure(4)
+xyzr = lla2xyz(res(:,2:4), 0,[39.8420194 -105.2123333 1808]);
+plot3Dline(xyzr);
 
 # add timestamp column
 Nsamp = length(res);
@@ -173,7 +180,7 @@ res(1:Nsamp,1) = pts;
 
 # plot maneuver
 plot_tseg_color2(0,(Nsamp-1)*dt,res,1,maneuver,...
-  [39.8420194 -105.2123333 1808],10,2,0)
+  [39.8420194 -105.2123333 1808],10,2,-rhdg)
 
 endfunction
 
