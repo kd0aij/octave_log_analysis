@@ -44,19 +44,10 @@ gz = data(startIndex:endIndex,10);
 lat=data(startIndex:endIndex,posIndex);
 lon=data(startIndex:endIndex,posIndex+1);
 z = data(startIndex:endIndex,posIndex+2);
-##[lat lon z] = data(startIndex:endIndex,posIndex:posIndex+2);
 
-# convert to meters from start position
-#TODO: fix this; use code from kmlcreator
-x=lon-origin(2);
-y=lat-origin(1);
-x=x*53*5280/3.28;
-y=y*69*5280/3.28;
-z -= origin(3);
-
-# rotate parallel to runway
-a=runwayNorth*(pi/180);
-xyzr=[cos(a)*x.-sin(a)*y, sin(a)*x.+cos(a)*y, z];
+# convert to meters from origin
+# and rotate parallel to runway
+xyzr = lla2xyz([lat lon z], runwayNorth*(pi/180), origin);
 
 # assign colors representing roll angle
 # roll range is (-180,180] degrees
@@ -128,8 +119,8 @@ xlabel "east (m)"
 ylabel "alt (m)"
 
 subplot(2,2,3)
-scatter(xyzr(:,2),xyzr(:,3),sizes,colors,'filled')
-##scatterPlot(xyzr, 2, 3, sizes, colors, blue, [0 700])
+##scatter(xyzr(:,2),xyzr(:,3),sizes,colors,'filled')
+scatterPlot(xyzr, 2, 3, sizes, colors, blue, [0 300])
 title (sprintf("East elevation"))
 xlabel "north (m)"
 ylabel "alt (m)"
