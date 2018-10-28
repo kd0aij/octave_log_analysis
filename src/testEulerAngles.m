@@ -26,151 +26,55 @@ function res = testEulerAngles(maneuver)
 pkg load quaternion
 
 clear data res;
-
-global clat = 39.8421572;
-global clng = -105.2122285;
+#39.8420194 -105.2123333 1808
+global clat = 39.8420194;
+global clng = -105.2123333;
 global alt = 1808;
 global avgYaw;
 global dt = 1 / 25;
-global data;
+##global data;
 res = [];
 
 vThresh = 85;
 noise = 5; # degrees
-rhdg = 45; # runway heading
+rhdg = 30; # runway heading
+radius = 50;
 
 # straight and level entry
 s = 15;
-T = 3;
+T = 1;
 hdg = rhdg;
-xp = -s * T * cosd(hdg);
-yp = -s * T * sind(hdg);
-zp = alt + 30;
-[x y z data] = straight_level(xp, yp, zp, hdg, s, T);
+# end entry at center of box (150m in front of pilot)
+xo = -s * T;
+yo = 150;
+x = xo * cosd(hdg) - yo * sind(hdg);
+y = xo * sind(hdg) + yo * cosd(hdg);
+z = alt + 30;
+disp([x y z hdg])
+[xp yp zp hdg data] = do_maneuver('straight_level', radius, T, s, dt, x, y, z, hdg, noise, vThresh);
 res = [res; data];
-
-radius = 50;
-initTheta = -90; # starting point is bottom of CCW loop
-switch (maneuver)
-  case 'half_loop'
-    # speed s in m/sec
-    # gy in rad/sec (pitch rate)
-    gy = s / radius;
-    dtheta = gy * dt;
-    Nsamp = pi / dtheta;
-    # simulate pass by reference into writeRes
-    data = zeros(Nsamp, 26);
-    roll = 0;
-    gx = 0;
-    gz = 0;
-    theta = initTheta;
-    for i = 1:Nsamp
-      pitch = 90 + theta;
-      dxy = radius * cosd(theta);
-      xp = x + dxy * cosd(hdg);
-      yp = y + dxy * sind(hdg);
-      zp = z + radius + radius * sin(deg2rad(theta));  
-      writeRes(i, noise, vThresh, ...
-               roll, pitch, hdg, gx, gy, gz, xp, yp, zp);
-      theta += rad2deg(dtheta);
-    endfor
-    hdg += 180;  # heading is reversed at exit
-  case 'loop'
-    # speed s in m/sec
-    # gy in rad/sec (pitch rate)
-    gy = s / radius;
-    dtheta = gy * dt;
-    Nsamp = 2*pi / dtheta;
-    data = zeros(Nsamp, 26);
-    roll = 0;
-    hdg = 0;
-    gx = 0;
-    gz = 0;
-    yp = y;
-    theta = initTheta;
-    for i = 1:Nsamp
-      pitch = 90 + theta;
-      xp = x + radius * cos(deg2rad(theta));
-      zp = z + radius + radius * sin(deg2rad(theta));  
-      writeRes(i, noise, vThresh, ...
-               roll, pitch, hdg, gx, gy, gz, xp, yp, zp);
-      theta += rad2deg(dtheta);
-    endfor
-  case 'rolling_loop'
-    # speed s in m/sec
-    # gy in rad/sec (pitch rate)
-    gy = s / radius;
-    dtheta = gy * dt;
-    Nsamp = 2*pi / dtheta;
-    data = zeros(Nsamp, 26);
-    gx = gy;
-    gz = 0;
-    hdg = 0;
-    yp = y;
-    theta = initTheta;
-    for i = 1:Nsamp
-      roll = 90 + theta;
-      pitch = 90 + theta;
-      xp = x + radius * cos(deg2rad(theta));
-      zp = z + radius + radius * sin(deg2rad(theta));    
-      writeRes(i, noise, vThresh, ...
-               roll, pitch, hdg, gx, gy, gz, xp, yp, zp);
-      theta += rad2deg(dtheta);
-    endfor
-  case '4_point_rolling_loop'
-    # speed s in m/sec
-    # gy in rad/sec (pitch rate)
-    gy = s / radius;
-    dtheta = gy * dt;
-    Nsamp = 2*pi / dtheta;
-    data = zeros(Nsamp, 26);
-    hdg = 0;
-    gz = 0;
-    yp = y;
-    theta = initTheta;
-    for i = 1:Nsamp
-      if i==1
-        roll = 0;
-        lastroll = roll;
-      endif
-      # roll at 2gy deg/sec during odd octants
-      octant = floor((360+theta+22.5)/45);
-      if mod(octant,2) == 1
-        gx = 2 * gy;
-        roll += rad2deg(gx) * dt;
-        lastroll = roll;
-      else 
-        roll = lastroll;  
-        gx = 0;      
-      endif
-      pitch = 90 + theta;
-      xp = x + radius * cos(deg2rad(theta));
-      zp = z + radius + radius * sin(deg2rad(theta));    
-      writeRes(i, noise, vThresh, ...
-               roll, pitch, hdg, gx, gy, gz, xp, yp, zp);
-      theta += rad2deg(dtheta);
-    endfor
-    otherwise
-      disp("usage: testEulerAngles(maneuver)");
-      disp("where maneuver is one of:")
-      disp("loop, rolling_loop, 4_point_rolling_loop");
-      return
-endswitch
-res = [res; data];
-
-# straight and level exit
-s = 15;
-T = 3;
-[x y z data] = straight_level(xp, yp, zp, hdg, s, T);
+disp([xp yp zp hdg])
 
 figure(3)
-xyzr = lla2xyz(res(:,2:4), 0,[39.8420194 -105.2123333 1808]);
+title('entry')
+xyzr = lla2xyz(data(:,2:4), 0,[39.8420194 -105.2123333 1808]);
 plot3Dline(xyzr);
 
+[xp yp zp hdg data] = do_maneuver(maneuver, radius, T, s, dt, xp, yp, zp, hdg, noise, vThresh);
 res = [res; data];
 
 figure(4)
-xyzr = lla2xyz(res(:,2:4), 0,[39.8420194 -105.2123333 1808]);
+title(maneuver)
+xyzr = lla2xyz(data(:,2:4), 0,[39.8420194 -105.2123333 1808]);
+plot3Dline(xyzr);
+
+# straight and level exit
+[xp yp zp hdg data] = do_maneuver('straight_level', radius, T, s, dt, xp, yp, zp, hdg, noise, vThresh);
+res = [res; data];
+
+figure(5)
+title('exit')
+xyzr = lla2xyz(data(:,2:4), 0,[39.8420194 -105.2123333 1808]);
 plot3Dline(xyzr);
 
 # add timestamp column
@@ -182,78 +86,4 @@ res(1:Nsamp,1) = pts;
 plot_tseg_color2(0,(Nsamp-1)*dt,res,1,maneuver,...
   [39.8420194 -105.2123333 1808],10,2,-rhdg)
 
-endfunction
-
-function data = writeRes(i, noise, vThresh, ...
-                  roll, pitch, hdg, gx, gy, gz, xp, yp, zp)
-                
-  # data is declared externally and modified in this function
-  # the other globals are not modified  
-  global data clat clng alt avgYaw;
-  
-  if i == 1
-    avgYaw = hdg;
-  endif
-
-  n_roll = roll + 2 * noise * (rand - 0.5);
-  n_pitch = pitch + 0 * rand;
-  n_hdg = hdg + 0 * rand;
-  
-  # gyros (deg/sec)
-  data(i,8:10) = [gx gy gz];
-  
-  # ATT
-  data(i,5:7) = [roll wrappedPitch(pitch) hdg];
-
-  qr = rot2q([1,0,0],deg2rad(n_roll));
-  qp = rot2q([0,1,0],deg2rad(n_pitch));
-  qy = rot2q([0,0,1],deg2rad(n_hdg));
-  quat = qy * qp * qr;
-
-  # Q1-4
-  data(i,17:20) = [quat.w quat.i quat.j quat.k];
-
-  # corrected Euler RPY
-  # handle Euler roll/yaw indeterminacy on vertical lines
-  # convert quaternion to Euler angles; pitch threshold for vertical is 60 degrees 
-  if abs(wrappedPitch(pitch)) < vThresh
-    avgYaw += .2 * (hdg - avgYaw);
-  endif
-  [r p y] = attFromQuat(data(i,17:20), avgYaw, vThresh);
-  data(i,24:26) = [r p y];
-  
-  lat = clat + m2dLat(yp);
-  lng = clng + m2dLng(xp, clat);
-  
-  # POS, GPS
-  data(i,2:4) = [lat lng zp];
-  data(i,21:23) = [lat lng zp];
-endfunction
-
-function [x y z data] = straight_level(x, y, z, hdg, s, T)
-  global dt;
-  
-  # T seconds straight and level entry at speed s
-  # starting at x,y,z on heading h
-  Nsamp = T / dt;
-  global data;
-  data = zeros(Nsamp, 26);
-
-  roll = 0;
-  pitch = 0;
-  gx = 0;
-  gy = 0;
-  gz = 0;
-  noise = 0;
-  vThresh = 10;
-  
-  dx = s * dt * cosd(hdg);
-  dy = s * dt * sind(hdg);
-  
-  for i = 1:Nsamp
-    writeRes(i, noise, vThresh, ...
-             roll, pitch, hdg, gx, gy, gz, x, y, z);
-    x += dx;
-    y += dy;
-  endfor
 endfunction
