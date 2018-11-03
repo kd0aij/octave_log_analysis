@@ -1,14 +1,16 @@
 function [state data] = do_maneuver(maneuver, radius, T, s, dt, state, 
-                                    noise, pThresh, origin)
+                                    noise, pThresh, origin, xwind)
   # state comprises Euler RPY, ECEF position and speed in a structure
   pkg load quaternion;
   
   roll = state.RPY(1);
   pitch = state.RPY(2);
   yaw = state.RPY(3);
-  disp([roll pitch yaw]);
+##  disp([roll pitch yaw]);
   pos = state.pos;
   s = state.s;
+  
+  yawCor = rad2deg(atan2(xwind, s));
   
   global avgYaw = yaw;
   
@@ -20,11 +22,60 @@ function [state data] = do_maneuver(maneuver, radius, T, s, dt, state,
 
   disp(maneuver);
   switch (maneuver)
-    # the logic for all of these maneuvers must be generalized if we allow
-    # arbitrary state at entry. Currently, the initial pitch and roll are fixed
-    # but in the case of a rolling loop, initial roll could be arbitrary.
-    # Initial pitch for a loop could also be made arbitrary by offsetting
-    # the theta loop variable; done for half_loop only...
+    # loop works for arbitrary initial roll/pitch/yaw values
+    # It also works with a crosswind, but that demonstrates problems with Euler
+    # angle representation; the solution may be to back out the crosswind-induced
+    # yaw angle.  That should transform the attitude to the zero-crosswind case
+    # which has no significant problems except for the roll/yaw ambiguity on verticals.
+    # A better approach for estimating the yaw value (heading) for resolving
+    # the ambiguity would be to fit a plane to the loop (or arc), and use its
+    # orientation as the correct yaw angle.
+    case 'loop'
+      # loop center (in x-z plane) is determined by initial pitch and position
+      initTheta = pitch - 90; # starting point is bottom of CCW loop
+      dxy = radius * cosd(initTheta);
+      # rotate to plane specified by yaw angle
+      cx = x - dxy * cyaw;
+      cy = y - dxy * syaw;
+      cz = z - radius * sind(initTheta);
+      
+      # speed s in m/sec
+      # gy in rad/sec (pitch rate)
+      gy = s / radius;
+      dtheta = gy * dt;
+      Nsamp = 2 * pi / dtheta;
+      data = zeros(Nsamp, 26);
+      gx = 0;
+      gz = 0;
+      xp = x;
+      yp = y;
+      zp = z;
+      quat = euler2quat(roll, -pitch, yaw-yawCor);
+      dquat = rot2q([0,1,0], -dtheta);
+
+      dy = [0 1 0] * xwind;
+      dx = [1 0 0] * s;
+      dv = (dx + dy) * dt;
+      
+      for i = 1:Nsamp
+        [roll pitch yawc] = quat2euler([quat.w,quat.x,quat.y,quat.z]);
+        # write current state
+        data = writeRes(data, i, noise, pThresh, origin,
+                 roll, pitch, yawc, gx, gy, gz, xp, yp, zp);
+                 
+        # update position
+        dp = hamilton_product(quat, dv);
+        xp += dp(1);
+        yp += dp(2);
+        zp += dp(3);
+        # update attitude
+        quat = unit(dquat * quat); # rotate pitch in earth frame
+##        quat = unit(quat * dquat); # rotate pitch in body frame (incorrect)
+      endfor
+      # final quaternion determines orientation at exit, except for yaw correction
+##      pitch *= -1;
+      
+      
     case 'half_loop'
       # loop center (in x-z plane) is determined by initial pitch and position
       initTheta = pitch - 90; # starting point is bottom of CCW loop
@@ -45,14 +96,18 @@ function [state data] = do_maneuver(maneuver, radius, T, s, dt, state,
       xp = x;
       yp = y;
       zp = z;
-      quat = euler2quat(roll, -pitch, yaw);
+      quat = euler2quat(roll, -pitch, yaw-yawCor);
       dquat = rot2q([0,1,0], -dtheta);
-      dv = [s*dt 0 0];
+
+      dy = [0 1 0] * xwind;
+      dx = [1 0 0] * s;
+      dv = (dx + dy) * dt;
+      
       for i = 1:Nsamp
-        [roll pitch yaw] = quat2euler([quat.w,quat.x,quat.y,quat.z]);
+        [roll pitch yawc] = quat2euler([quat.w,quat.x,quat.y,quat.z]);
         # write current state
         data = writeRes(data, i, noise, pThresh, origin,
-                 roll, pitch, yaw, gx, gy, gz, xp, yp, zp);
+                 roll, pitch, yawc, gx, gy, gz, xp, yp, zp);
                  
         # update position
         dp = hamilton_product(quat, dv);
@@ -60,12 +115,12 @@ function [state data] = do_maneuver(maneuver, radius, T, s, dt, state,
         yp += dp(2);
         zp += dp(3);
         # update attitude
-        quat = unit(quat * dquat);
+        quat = unit(dquat * quat);
       endfor
       # TODO: compute these from final quaternion
 ##      roll += 180; # roll flips 180 degrees at exit
 ##      yaw += 180;  # heading is reversed at exit
-      pitch *= -1;
+##      pitch *= -1;
       
     case 'half_outside_loop'
       # need to generalize the state to persist at least R and T
@@ -115,28 +170,28 @@ function [state data] = do_maneuver(maneuver, radius, T, s, dt, state,
       roll += 180; # roll flips 180 degrees at exit
       yaw += 180;  # and heading is reversed at exit
       
-    case 'loop'
-      initTheta = -90; # starting point is bottom of CCW loop
-      # speed s in m/sec
-      # gy in rad/sec (pitch rate)
-      gy = s / radius;
-      dtheta = gy * dt;
-      Nsamp = 2*pi / dtheta;
-      data = zeros(Nsamp, 26);
-      gx = 0;
-      gz = 0;
-      yp = y;
-      theta = initTheta;
-      for i = 1:Nsamp
-        pitch = 90 + theta;
-        dxy = radius * cosd(theta);
-        xp = x + dxy * cosd(yaw);
-        yp = y + dxy * sind(yaw);
-        zp = z + radius + radius * sind(theta);  
-        data = writeRes(data, i, noise, pThresh, origin,
-                 roll, pitch, yaw, gx, gy, gz, xp, yp, zp);
-        theta += rad2deg(dtheta);
-      endfor
+##    case 'loop'
+##      initTheta = -90; # starting point is bottom of CCW loop
+##      # speed s in m/sec
+##      # gy in rad/sec (pitch rate)
+##      gy = s / radius;
+##      dtheta = gy * dt;
+##      Nsamp = 2*pi / dtheta;
+##      data = zeros(Nsamp, 26);
+##      gx = 0;
+##      gz = 0;
+##      yp = y;
+##      theta = initTheta;
+##      for i = 1:Nsamp
+##        pitch = 90 + theta;
+##        dxy = radius * cosd(theta);
+##        xp = x + dxy * cosd(yaw);
+##        yp = y + dxy * sind(yaw);
+##        zp = z + radius + radius * sind(theta);  
+##        data = writeRes(data, i, noise, pThresh, origin,
+##                 roll, pitch, yaw, gx, gy, gz, xp, yp, zp);
+##        theta += rad2deg(dtheta);
+##      endfor
       
     case 'rolling_loop'
       initTheta = -90; # starting point is bottom of CCW loop
@@ -198,8 +253,8 @@ function [state data] = do_maneuver(maneuver, radius, T, s, dt, state,
         theta += rad2deg(dtheta);
       endfor
       
-    case 'straight_level'
-      # T seconds straight and level entry at speed s
+    case 'straight_line'
+      # T seconds straight line at speed s and current attitude
       # starting at x,y,z on heading h
       Nsamp = T / dt;
       data = zeros(Nsamp, 26);
@@ -213,8 +268,12 @@ function [state data] = do_maneuver(maneuver, radius, T, s, dt, state,
       yp = y;
       zp = z;
       
-      quat = euler2quat(roll, -pitch, yaw);
-      dv = [s*dt 0 0];
+      quat = euler2quat(roll, -pitch, yaw-yawCor);
+      dy = [0 1 0] * xwind;
+      dx = [1 0 0] * s;
+      dv = (dx + dy) * dt;
+      
+##      dv = [s*dt 0 0];
       dp = hamilton_product(quat, dv);
 
       for i = 1:Nsamp

@@ -25,6 +25,10 @@ function [r, p, y] = attFromQuat(q, avgYaw, pthresh)
     aq = unit(inv(rot2q([0,1,0],deg2rad(p))) * aq);
     # remaining rotation is roll
     [axisr, thetar] = q2rot(aq);
+    # if axis is not parallel to x, assume roll is zeros
+    if dot(axisr, [1 0 0]) < 0.9
+      thetar = 0;
+    endif
     if p < 0
       thetar *= -1;
     endif

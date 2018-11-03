@@ -33,24 +33,28 @@ origin = [39.8420194 -105.2123333 1808];
 dt = 1 / 25;
 res = [];
 
-pThresh = 80;
+pThresh = 85;
 noise = 0; # degrees
 rhdg = 0; # runway heading
+xwind = 15; # m/sec along body-frame Y axis
+
 radius = 50;
 
 # straight line entry
 # center of box (150m in front of pilot), 30m AGL
 pos = [0 150 origin(3)+30]';
-s = 15;
+spd = 15;
 T = 1;
 
 # roll and pitch on entry
-roll = 0;
+roll = 5;
+rollTolerance = 10;
+
 pitch = 0;
 rot = [roll pitch rhdg];
 
 # end entry at center of box (150m in front of pilot)
-pos(1) = -s * T;
+pos(1) = -spd * T;
 
 # rotation about earth Z from East to runway heading
 rE2runway = rotv([0 0 1], deg2rad(rhdg));
@@ -59,10 +63,10 @@ pos = rE2runway' * pos;
 # state comprises Euler RPY, ECEF position and speed
 state.RPY = rot;
 state.pos = pos';
-state.s = s;
+state.s = spd;
 
-[state data] = do_maneuver('straight_level', radius, T, s, dt,
-                           state, noise, pThresh, origin);
+[state data] = do_maneuver('straight_line', radius, T, spd, dt,
+                           state, noise, pThresh, origin, xwind);
 res = [res; data];
 
 ##figure(3)
@@ -72,8 +76,8 @@ res = [res; data];
 ##title('entry')
 
 maneuver = 'half_loop';
-[state data] = do_maneuver(maneuver, radius, T, s, dt,
-                              state, noise, pThresh, origin);
+[state data] = do_maneuver(maneuver, radius, T, spd, dt,
+                              state, noise, pThresh, origin, xwind);
 res = [res; data];
 
 ##figure(4)
@@ -83,10 +87,10 @@ res = [res; data];
 ##title(regexprep(maneuver,'_',' '))
 
 # second half_loop
-maneuver = 'half_loop';
-[state data] = do_maneuver(maneuver, radius, T, s, dt,
-                              state, noise, pThresh, origin);
-res = [res; data];
+##maneuver = 'half_loop';
+##[state data] = do_maneuver(maneuver, radius, T, spd, dt,
+##                              state, noise, pThresh, origin, xwind);
+##res = [res; data];
 
 ##figure(5)
 ##xyzr = lla2xyz(data(:,2:4), 0,origin);
@@ -95,8 +99,8 @@ res = [res; data];
 ##title(regexprep(maneuver,'_',' '))
 
 # straight and level exit
-[state data] = do_maneuver('straight_level', radius, T, s, dt, 
-                              state, noise, pThresh, origin);
+[state data] = do_maneuver('straight_line', radius, T, spd, dt, 
+                              state, noise, pThresh, origin, xwind);
 res = [res; data];
 
 ##figure(6)
@@ -120,7 +124,10 @@ pts = [0:dt:(Nsamp-1)*dt];
 res(1:Nsamp,1) = pts;
 
 # plot maneuver
-rollTolerance = 10;
-plot_tseg_color2(0,(Nsamp-1)*dt,res,1,'some_maneuvers',origin,rollTolerance,2,rhdg,pThresh);
+yawCor = rad2deg(atan2(xwind, spd));
+plot_title = sprintf("roll tolerance %d degrees, crosswind correction: %5.1f deg",
+                     rollTolerance, yawCor);
+plot_tseg_color2(0, (Nsamp-1)*dt, res, 1, 'some_maneuvers',
+                 origin, rollTolerance, 2, rhdg, pThresh, plot_title);
 
 endfunction

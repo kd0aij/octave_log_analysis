@@ -1,6 +1,6 @@
 function plot_tseg_color2(startTime, endTime, data, ...
   fignum=1, label='', origin=[39.8420194 -105.2123333 1808], 
-  rollTolerance=15, posIndex=2, runwayNorth=16, pThresh=80)
+  rollTolerance=15, posIndex=2, runwayNorth=16, pThresh=80, plotTitle='')
   
 # data contains fields: 
 #         1    2    3    4     5      6    7
@@ -110,7 +110,7 @@ fignum
 figure(fignum, 'position', [100,100,800,800])
 subplot(2,2,1)
 scatterPlot(xyzr, 1, 2, sizes, colors, blue, [-350 350])
-title (sprintf("roll tolerance %d degrees\nPlan view", rollTolerance))
+title (sprintf("Plan view\n%s", plotTitle))
 xlabel "east (m)"
 ylabel "north (m)"
 
@@ -160,13 +160,12 @@ legend("roll","pitch","yaw")
 figure(fignum+1, 'position', [900,100,800,800])
 subplot(2,1,1)
 plot(tsp, (180/pi)*unwrap(roll*pi/180), '.-r', tsp, pitch, '.-k', tsp, (180/pi)*unwrap(yaw*pi/180), '.-m');
-##plot(tsp, roll, 'o-r', tsp, pitch, 'o-k', tsp, yaw, 'o-m');
 # highlight abs(pitch) > pThresh
 hold on
 xxx = find(abs(pitch)>pThresh);
-plot(tsp(xxx), pitch(xxx), 'or');
+plot(tsp(xxx), pitch(xxx), 'ok');
 # highlight roll error > rollTolerance
-plot(tsp(rollErr), roll(rollErr), 'or');
+plot(tsp(rollErr), rad2deg(unwrap(deg2rad(roll(rollErr)))), 'or');
 
 limits=axis();
 xoffset = (limits(2)-limits(1))/(length(thacks)*4);
