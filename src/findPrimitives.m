@@ -1,6 +1,6 @@
 function [lines, arcs] = findPrimitives(data,...
   vmin,tmin,rateMin,rateMax,lpd=0.95,origin=[39.8420194 -105.2123333 1808],
-  pilotNorth=16*(pi/180))
+  pilotNorth=16)
   # find straight line segments parameterized by 3D line equation:
   # P = alpha * v * dt + O
   # where P and O are [x,y,z] coord's, v is a 3D unit vector and alpha is

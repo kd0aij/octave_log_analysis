@@ -47,7 +47,7 @@ z = data(startIndex:endIndex,posIndex+2);
 
 # convert to meters from origin
 # and rotate parallel to runway
-xyzr = lla2xyz([lat lon z], deg2rad(runwayNorth), origin);
+xyzr = lla2xyz([lat lon z], -runwayNorth, origin);
 
 # assign colors representing roll angle
 # roll range is (-180,180] degrees

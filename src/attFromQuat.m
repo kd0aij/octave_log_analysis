@@ -20,11 +20,11 @@ function [r, p, y] = attFromQuat(q, avgYaw, pthresh)
 ##    printf(" roll: %5.3f, pitch: %5.3f, yaw: %5.3f, avgYaw: %5.3f\n", r, p, y, avgYaw);
       
     # remove avgYaw
-    aq = inv(rot2q([0,0,1],deg2rad(avgYaw))) * quat;
+    aq = unit(inv(rot2q([0,0,1],deg2rad(avgYaw))) * quat);
     # remove pitch
-    aq = inv(rot2q([0,1,0],deg2rad(real(p)))) * aq;
+    aq = unit(inv(rot2q([0,1,0],deg2rad(p))) * aq);
     # remaining rotation is roll
-    [axisr, thetar] = q2rot(unit(aq));
+    [axisr, thetar] = q2rot(aq);
     if p < 0
       thetar *= -1;
     endif
