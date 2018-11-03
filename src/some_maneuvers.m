@@ -26,23 +26,28 @@ function some_maneuvers()
 pkg load quaternion
 
 clear res;
+close all;
 
 origin = [39.8420194 -105.2123333 1808];
 
 dt = 1 / 25;
 res = [];
 
-vThresh = 85;
-noise = 5; # degrees
-rhdg = 30; # runway heading
+pThresh = 80;
+noise = 0; # degrees
+rhdg = 0; # runway heading
 radius = 50;
 
-# straight and level entry
+# straight line entry
 # center of box (150m in front of pilot), 30m AGL
 pos = [0 150 origin(3)+30]';
 s = 15;
 T = 1;
-rot = [0 30 rhdg];
+
+# roll and pitch on entry
+roll = 0;
+pitch = 0;
+rot = [roll pitch rhdg];
 
 # end entry at center of box (150m in front of pilot)
 pos(1) = -s * T;
@@ -57,48 +62,57 @@ state.pos = pos';
 state.s = s;
 
 [state data] = do_maneuver('straight_level', radius, T, s, dt,
-                           state, noise, vThresh, origin);
+                           state, noise, pThresh, origin);
 res = [res; data];
 
-figure(3)
-xyzr = lla2xyz(data(:,2:4), 0, origin);
-plot(xyzr(:,1), xyzr(:,2), 'o');
-##axis equal
-title('entry')
+##figure(3)
+##xyzr = lla2xyz(data(:,2:4), 0, origin);
+##plot(xyzr(:,1), xyzr(:,2), 'o');
+####axis equal
+##title('entry')
 
 maneuver = 'half_loop';
 [state data] = do_maneuver(maneuver, radius, T, s, dt,
-                              state, noise, vThresh, origin);
+                              state, noise, pThresh, origin);
 res = [res; data];
 
-figure(4)
-xyzr = lla2xyz(data(:,2:4), 0,origin);
-plot3Dline(xyzr, 'o');
-axis equal
-title(regexprep(maneuver,'_',' '))
+##figure(4)
+##xyzr = lla2xyz(data(:,2:4), 0,origin);
+##plot3Dline(xyzr, 'o');
+##axis equal
+##title(regexprep(maneuver,'_',' '))
 
 # second half_loop
 maneuver = 'half_loop';
 [state data] = do_maneuver(maneuver, radius, T, s, dt,
-                              state, noise, vThresh, origin);
+                              state, noise, pThresh, origin);
 res = [res; data];
 
-figure(5)
-xyzr = lla2xyz(data(:,2:4), 0,origin);
-plot3Dline(xyzr, 'o');
-axis equal
-title(regexprep(maneuver,'_',' '))
+##figure(5)
+##xyzr = lla2xyz(data(:,2:4), 0,origin);
+##plot3Dline(xyzr, 'o');
+##axis equal
+##title(regexprep(maneuver,'_',' '))
 
 # straight and level exit
 [state data] = do_maneuver('straight_level', radius, T, s, dt, 
-                              state, noise, vThresh, origin);
+                              state, noise, pThresh, origin);
 res = [res; data];
 
-figure(6)
-xyzr = lla2xyz(data(:,2:4), 0,origin);
-plot(xyzr(:,1), xyzr(:,2), 'o');
-##axis equal
-title('exit')
+##figure(6)
+##xyzr = lla2xyz(data(:,2:4), 0,origin);
+##plot(xyzr(:,1), xyzr(:,2), 'o');
+####axis equal
+##title('exit')
+
+figure(7)
+xyzr = lla2xyz(res(:,2:4), 0,origin);
+plot3Dline(xyzr, 'o');
+axis equal
+title('full')
+xlabel('East')
+ylabel('North')
+zlabel('Alt')
 
 # add timestamp column
 Nsamp = length(res);
@@ -106,6 +120,7 @@ pts = [0:dt:(Nsamp-1)*dt];
 res(1:Nsamp,1) = pts;
 
 # plot maneuver
-plot_tseg_color2(0,(Nsamp-1)*dt,res,1,'some_maneuvers',origin,10,2,rhdg);
+rollTolerance = 10;
+plot_tseg_color2(0,(Nsamp-1)*dt,res,1,'some_maneuvers',origin,rollTolerance,2,rhdg,pThresh);
 
 endfunction

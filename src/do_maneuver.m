@@ -1,11 +1,12 @@
 function [state data] = do_maneuver(maneuver, radius, T, s, dt, state, 
-                                    noise, vThresh, origin)
+                                    noise, pThresh, origin)
   # state comprises Euler RPY, ECEF position and speed in a structure
   pkg load quaternion;
   
-  roll = state.RPY(1)
-  pitch = state.RPY(2)
-  yaw = state.RPY(3)
+  roll = state.RPY(1);
+  pitch = state.RPY(2);
+  yaw = state.RPY(3);
+  disp([roll pitch yaw]);
   pos = state.pos;
   s = state.s;
   
@@ -48,9 +49,9 @@ function [state data] = do_maneuver(maneuver, radius, T, s, dt, state,
       dquat = rot2q([0,1,0], -dtheta);
       dv = [s*dt 0 0];
       for i = 1:Nsamp
-        [roll pitch yaw] = quat2euler([quat.w,quat.x,quat.y,quat.z])
+        [roll pitch yaw] = quat2euler([quat.w,quat.x,quat.y,quat.z]);
         # write current state
-        data = writeRes(data, i, noise, vThresh, origin,
+        data = writeRes(data, i, noise, pThresh, origin,
                  roll, pitch, yaw, gx, gy, gz, xp, yp, zp);
                  
         # update position
@@ -100,7 +101,7 @@ function [state data] = do_maneuver(maneuver, radius, T, s, dt, state,
 ##        xp = cx + dxy * cosd(yaw);
 ##        yp = cy + dxy * sind(yaw);
 ##        zp = cz + radius * sind(theta);  
-        data = writeRes(data, i, noise, vThresh, origin,
+        data = writeRes(data, i, noise, pThresh, origin,
                  roll, pitch, yaw, gx, gy, gz, xp, yp, zp);
 ##        theta += rad2deg(dtheta);
         # update position
@@ -132,7 +133,7 @@ function [state data] = do_maneuver(maneuver, radius, T, s, dt, state,
         xp = x + dxy * cosd(yaw);
         yp = y + dxy * sind(yaw);
         zp = z + radius + radius * sind(theta);  
-        data = writeRes(data, i, noise, vThresh, origin,
+        data = writeRes(data, i, noise, pThresh, origin,
                  roll, pitch, yaw, gx, gy, gz, xp, yp, zp);
         theta += rad2deg(dtheta);
       endfor
@@ -156,7 +157,7 @@ function [state data] = do_maneuver(maneuver, radius, T, s, dt, state,
         xp = x + dxy * cosd(yaw);
         yp = y + dxy * sind(yaw);
         zp = z + radius + radius * sind(theta);    
-        data = writeRes(data, i, noise, vThresh, origin,
+        data = writeRes(data, i, noise, pThresh, origin,
                  roll, pitch, yaw, gx, gy, gz, xp, yp, zp);
         theta += rad2deg(dtheta);
       endfor
@@ -192,7 +193,7 @@ function [state data] = do_maneuver(maneuver, radius, T, s, dt, state,
         xp = x + dxy * cosd(yaw);
         yp = y + dxy * sind(yaw);
         zp = z + radius + radius * sind(theta);    
-        data = writeRes(data, i, noise, vThresh, origin,
+        data = writeRes(data, i, noise, pThresh, origin,
                  roll, pitch, yaw, gx, gy, gz, xp, yp, zp);
         theta += rad2deg(dtheta);
       endfor
@@ -207,7 +208,6 @@ function [state data] = do_maneuver(maneuver, radius, T, s, dt, state,
       gy = 0;
       gz = 0;
       noise = 0;
-      vThresh = 10;
       
       xp = x;
       yp = y;
@@ -218,7 +218,7 @@ function [state data] = do_maneuver(maneuver, radius, T, s, dt, state,
       dp = hamilton_product(quat, dv);
 
       for i = 1:Nsamp
-        data = writeRes(data, i, noise, vThresh, origin,
+        data = writeRes(data, i, noise, pThresh, origin,
                  roll, pitch, yaw, gx, gy, gz, xp, yp, zp);
 
         xp += dp(1);
@@ -237,7 +237,7 @@ function [state data] = do_maneuver(maneuver, radius, T, s, dt, state,
   state.s = s;
 endfunction
 
-function data = writeRes(data, i, noise, vThresh, origin,
+function data = writeRes(data, i, noise, pThresh, origin,
                   roll, pitch, yaw, gx, gy, gz, xp, yp, zp)
                   
   global avgYaw;
@@ -262,12 +262,13 @@ function data = writeRes(data, i, noise, vThresh, origin,
 
   # corrected Euler RPY
   # handle Euler roll/yaw indeterminacy on vertical lines
-  # convert quaternion to Euler angles; pitch threshold for vertical is vThresh 
-  if abs(wrappedPitch(pitch)) < vThresh
-    avgYaw += .2 * (yaw - avgYaw);
+  # convert quaternion to Euler angles; pitch threshold for vertical is pThresh 
+  if abs(wrappedPitch(pitch)) < pThresh
+##    avgYaw += .2 * (yaw - avgYaw);
+    avgYaw = yaw;
   endif
   avgYaw = wrap(avgYaw);
-  [r p y] = attFromQuat(data(i,17:20), avgYaw, vThresh);
+  [r p y] = attFromQuat(data(i,17:20), avgYaw, pThresh);
   data(i,24:26) = [r p y];
   
   lat = origin(1) + m2dLat(yp);

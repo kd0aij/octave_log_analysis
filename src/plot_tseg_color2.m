@@ -1,6 +1,6 @@
 function plot_tseg_color2(startTime, endTime, data, ...
   fignum=1, label='', origin=[39.8420194 -105.2123333 1808], 
-  levelThresh=15, posIndex=2, runwayNorth=16)
+  rollTolerance=15, posIndex=2, runwayNorth=16, pThresh=80)
   
 # data contains fields: 
 #         1    2    3    4     5      6    7
@@ -75,25 +75,27 @@ green = hsv2rgb([.25,1,1]);
 greeni = hsv2rgb([.25,1,.8]);
 blue = hsv2rgb([.60,1,1]);
 magenta = [1,0,1];
+rollErr = [];
 
 for i = 1:length(colors)
-  if abs(roll(i)) < levelThresh
+  if abs(roll(i)) < rollTolerance
     # level
     colors(i,:) = green;
-  elseif abs(roll(i)-180) < levelThresh
+  elseif abs(roll(i)-180) < rollTolerance
     # inverted
     colors(i,:) = greeni;
-  elseif abs(roll(i)+180) < levelThresh
+  elseif abs(roll(i)+180) < rollTolerance
     # inverted
     colors(i,:) = greeni;
-  elseif abs(roll(i)-90) < levelThresh
+  elseif abs(roll(i)-90) < rollTolerance
     # right knife edge
     colors(i,:) = yellow;
-  elseif abs(roll(i)+90) < levelThresh
+  elseif abs(roll(i)+90) < rollTolerance
     # left knife edge
     colors(i,:) = yellow;
   else
     colors(i,:) = red;
+    rollErr = [rollErr i];
   endif
 endfor
 sizes = 10 * ones(length(colors),1);
@@ -108,7 +110,7 @@ fignum
 figure(fignum, 'position', [100,100,800,800])
 subplot(2,2,1)
 scatterPlot(xyzr, 1, 2, sizes, colors, blue, [-350 350])
-title (sprintf("roll tolerance %d degrees\nPlan view", levelThresh))
+title (sprintf("roll tolerance %d degrees\nPlan view", rollTolerance))
 xlabel "east (m)"
 ylabel "north (m)"
 
@@ -135,7 +137,7 @@ for i = 1:length(thacks)
   plot([thacks(i) thacks(i)],limits(3:4),'-b');
   text(thacks(i)-xoffset,yoffset,num2str(i-1))
 endfor
-yGrid = [levelThresh 45 90 180-levelThresh 180];
+yGrid = [rollTolerance 45 90 180-rollTolerance 180];
 for i = 1:length(yGrid)
   plot([limits(1) limits(2)],[-yGrid(i),-yGrid(i)],'-b');
   plot([limits(1) limits(2)],[ yGrid(i), yGrid(i)],'-b');
@@ -159,10 +161,16 @@ figure(fignum+1, 'position', [900,100,800,800])
 subplot(2,1,1)
 plot(tsp, (180/pi)*unwrap(roll*pi/180), '.-r', tsp, pitch, '.-k', tsp, (180/pi)*unwrap(yaw*pi/180), '.-m');
 ##plot(tsp, roll, 'o-r', tsp, pitch, 'o-k', tsp, yaw, 'o-m');
+# highlight abs(pitch) > pThresh
+hold on
+xxx = find(abs(pitch)>pThresh);
+plot(tsp(xxx), pitch(xxx), 'or');
+# highlight roll error > rollTolerance
+plot(tsp(rollErr), roll(rollErr), 'or');
+
 limits=axis();
 xoffset = (limits(2)-limits(1))/(length(thacks)*4);
 yoffset = limits(3) + (limits(4)-limits(3))/40;
-hold on
 for i = 1:length(thacks)
   plot([thacks(i) thacks(i)],limits(3:4),'-b');
   text(thacks(i)-xoffset,yoffset,num2str(i-1))
@@ -176,7 +184,7 @@ xticklabels(xlabels);
 yoff = 180*round(limits(3) / 180);
 nwraps = round((limits(4)-limits(3)) / 180);
 yTicks = [];
-yGrid = [levelThresh 45 90 180-levelThresh 180+levelThresh 270-levelThresh 270+levelThresh ];
+yGrid = [rollTolerance 45 90 180-rollTolerance 180+rollTolerance 270-rollTolerance 270+rollTolerance ];
 for w = 1:nwraps
   for i = 1:length(yGrid)
     plot([limits(1) limits(2)],[ yoff+yGrid(i), yoff+yGrid(i)],'-b');
