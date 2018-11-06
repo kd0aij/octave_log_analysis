@@ -32,7 +32,7 @@ endIndex = startIndex;
 while (ts(endIndex) < endTime)
   endIndex += 1;
 endwhile
-printf("POS start/end indices: %d, %d\n", startIndex, endIndex);
+##printf("POS start/end indices: %d, %d\n", startIndex, endIndex);
 
 # extract gyro rate vectors
 tsp = ts(startIndex:endIndex);
@@ -165,8 +165,9 @@ hold on
 xxx = find(abs(pitch)>pThresh);
 plot(tsp(xxx), pitch(xxx), 'ok');
 # highlight roll error > rollTolerance
-plot(tsp(rollErr), rad2deg(unwrap(deg2rad(roll(rollErr)))), 'or');
-
+if length(rollErr) > 0
+  plot(tsp(rollErr), rad2deg(unwrap(deg2rad(roll(rollErr)))), 'or');
+endif
 limits=axis();
 xoffset = (limits(2)-limits(1))/(length(thacks)*4);
 yoffset = limits(3) + (limits(4)-limits(3))/40;
