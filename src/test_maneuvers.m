@@ -53,7 +53,7 @@ state.spd = 30;
 T = 3;
 
 # roll and pitch on entry
-roll = 15;
+roll = 0;
 pitch = 0;
 
 # state comprises Euler RPY, ECEF position and speed
@@ -65,10 +65,14 @@ state.pos(1) = -state.spd * T;
 state.pos = (rE2runway' * state.pos')';
 
 
-radius = 0;
-[state data] = pattern_maneuver('straight_line', radius, T, dt,
+radius = 360;
+##maneuver = 'straight_line';
+maneuver = 'roll';
+[state data] = pattern_maneuver(maneuver, radius, T, dt,
                            state, noise, pThresh, origin, rhdg, wind);
 res = [res; data];
+
+state.quat = euler2quat(0, 0, rhdg);
 
 ##figure(3)
 ##xyzr = lla2xyz(data(:,2:4), 0, origin);

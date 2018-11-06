@@ -50,7 +50,7 @@ function [state data] = pattern_maneuver(maneuver, radius, T, dt, state,
       gx = 0;
       gz = 0;
       
-      dquat = rot2q([0,1,0], -dtheta);
+      dquat = rot2q([0 1 0], -dtheta);
       quatc = wind_correction(state, wind);
         
       for i = 1:Nsamp
@@ -68,15 +68,13 @@ function [state data] = pattern_maneuver(maneuver, radius, T, dt, state,
       # final quaternion determines orientation at exit, except for yaw correction
       
     case 'straight_line'
-      # T seconds straight line at speed spd and current attitude
-      # starting at x,y,z on heading h
+      # T seconds straight line at current attitude
       Nsamp = 1 + T / dt;
       data = zeros(Nsamp, 26);
 
       gx = 0;
       gy = 0;
       gz = 0;
-      noise = 0;
       
       quatc = wind_correction(state, wind);
       dp = hamilton_product((state.quat*quatc), [1 0 0] * state.spd * dt) + wind * dt;
@@ -86,6 +84,33 @@ function [state data] = pattern_maneuver(maneuver, radius, T, dt, state,
                  state, gx, gy, gz, quatc);
 
         state.pos += dp;
+      endfor
+        
+    case 'roll'
+      # T seconds straight line roll with degrees specified by radius
+      Nsamp = 1 + T / dt;
+      data = zeros(Nsamp, 26);
+
+      gx = 0;
+      gy = 0;
+      gz = 0;
+      
+      quatc = quaternion(1);
+##      quatc = wind_correction(state, wind);
+##      dp = hamilton_product((state.quat*quatc), [1 0 0] * state.spd * dt) + wind * dt;
+      dtheta = deg2rad(radius) * dt / T;
+      dquat = rot2q([1 0 0], dtheta);
+
+      for i = 1:Nsamp
+        data = writeRes(data, i, noise, pThresh, origin, rhdg,
+                 state, gx, gy, gz, quatc);
+                 
+        dp = hamilton_product((state.quat*quatc), [1 0 0] * state.spd * dt) + wind * dt;
+        
+        state.pos += dp;
+        
+        # update attitude
+        state.quat = unit(state.quat * dquat); # rotate in body frame
       endfor
         
     otherwise
