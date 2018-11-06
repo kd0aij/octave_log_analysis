@@ -27,11 +27,11 @@ function test_maneuvers()
 origin = [39.8420194 -105.2123333 1808];
 
 rollTolerance = 10;
-pThresh = 85;
+pThresh = 75;
 noise = 0; # degrees
 
 rhdg  = 30; # runway heading
-wind = [0 0 0]; # m/sec in body frame
+wind = [0 5 0]; # m/sec in earth frame
 
 pkg load quaternion
 
@@ -53,7 +53,7 @@ state.spd = 30;
 T = 3;
 
 # roll and pitch on entry
-roll = 0;
+roll  = 0;
 pitch = 0;
 
 # state comprises Euler RPY, ECEF position and speed
@@ -64,15 +64,19 @@ state.pos(1) = -state.spd * T;
 
 state.pos = (rE2runway' * state.pos')';
 
+radius = 90;
+pattern_maneuver('wind_comp_on', radius, T, dt,
+                 state, noise, pThresh, origin, rhdg, wind);
 
-radius = 360;
-##maneuver = 'straight_line';
-maneuver = 'roll';
-[state data] = pattern_maneuver(maneuver, radius, T, dt,
+##[state data] = pattern_maneuver('straight_line', radius, T, dt,
+##                           state, noise, pThresh, origin, rhdg, wind);
+[state data] = pattern_maneuver('roll', radius, T, dt,
                            state, noise, pThresh, origin, rhdg, wind);
+
 res = [res; data];
 
-state.quat = euler2quat(0, 0, rhdg);
+# TODO: wind correction is backwards for roll=180
+##state.quat = euler2quat(0, 0, rhdg);
 
 ##figure(3)
 ##xyzr = lla2xyz(data(:,2:4), 0, origin);
@@ -82,7 +86,7 @@ state.quat = euler2quat(0, 0, rhdg);
 
 maneuver = 'arc';
 radius = 50;
-arclen = .5 * 2 * pi * radius;
+arclen = .5 * 2 * pi * abs(radius);
 T = arclen / state.spd;
 [state data] = pattern_maneuver(maneuver, radius, T, dt,
                               state, noise, pThresh, origin, rhdg, wind);
@@ -113,6 +117,7 @@ res = [res; data];
 ##title(regexprep(maneuver,'_',' '))
 
 # straight and level exit
+state.quat = euler2quat(0, 0, rhdg);
 T = 3;
 [state data] = pattern_maneuver('straight_line', radius, T, dt, 
                               state, noise, pThresh, origin, rhdg, wind);
@@ -134,6 +139,8 @@ title('full')
 xlabel('East')
 ylabel('North')
 zlabel('Alt')
+
+return
 
 # add timestamp column
 Nsamp = length(res);

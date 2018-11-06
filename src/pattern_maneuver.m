@@ -5,13 +5,18 @@ function [state data] = pattern_maneuver(maneuver, radius, T, dt, state,
   # and wind is a velocity vector in earth frame 
   pkg load quaternion;
   pkg load geometry;
+  global do_wind_comp = 1;
   
   [roll pitch yaw] = quat2euler(state.quat);
   status_string = sprintf("maneuver: %15s RPY: %5.1f, %5.1f, %5.1f, T: %5.1f", 
                           maneuver, roll, pitch, yaw, T);
   switch (maneuver)
-    # loop and half_loop work for arbitrary initial roll/pitch/yaw values
-    # It also works with a crosswind, but that demonstrates problems with Euler
+    case 'wind_comp_on'
+      do_wind_comp = 1;
+    case 'wind_comp_off'
+      do_wind_comp = 0;
+     
+    # Correcting for a crosswind, demonstrates problems with Euler
     # angle representation; the solution may be to back out the crosswind-induced
     # yaw angle.  That should transform the attitude to the zero-crosswind case
     # which has no significant problems except for the roll/yaw ambiguity on verticals.
@@ -46,38 +51,42 @@ function [state data] = pattern_maneuver(maneuver, radius, T, dt, state,
       dtheta = gy * dt;
 
       Nsamp = 1 + T / dt;
-      data = zeros(Nsamp, 26);
+      data = zeros(Nsamp, 29);
       gx = 0;
       gz = 0;
       
       dquat = rot2q([0 1 0], -dtheta);
-      quatc = wind_correction(state, wind);
+      quatc = wind_correctionE(state, wind);
         
       for i = 1:Nsamp
         # write current state
         data = writeRes(data, i, noise, pThresh, origin, rhdg,
                         state, gx, gy, gz, quatc);
                  
-        # update position by converting dv from body frame to earth frame
-        dp = hamilton_product((state.quat*quatc), [1 0 0] * state.spd * dt) + wind * dt;
+        # update position by converting velocity to earth frame and adding wind
+        dp = hamilton_product((quatc*state.quat), [1 0 0] * state.spd * dt) + wind * dt;
         state.pos += dp;
         
         # update attitude
         state.quat = unit(state.quat * dquat); # rotate pitch in body frame
+        # state.quat must represent desired flight path
+##        state.quat = unit(quatc * state.quat); 
+        # required for wind_correctionE
+        quatc = wind_correctionE(state, wind);
       endfor
       # final quaternion determines orientation at exit, except for yaw correction
       
     case 'straight_line'
       # T seconds straight line at current attitude
       Nsamp = 1 + T / dt;
-      data = zeros(Nsamp, 26);
+      data = zeros(Nsamp, 29);
 
       gx = 0;
       gy = 0;
       gz = 0;
       
-      quatc = wind_correction(state, wind);
-      dp = hamilton_product((state.quat*quatc), [1 0 0] * state.spd * dt) + wind * dt;
+      quatc = wind_correctionE(state, wind);
+      dp = hamilton_product((quatc*state.quat), [1 0 0] * state.spd * dt) + wind * dt;
 
       for i = 1:Nsamp
         data = writeRes(data, i, noise, pThresh, origin, rhdg,
@@ -89,28 +98,26 @@ function [state data] = pattern_maneuver(maneuver, radius, T, dt, state,
     case 'roll'
       # T seconds straight line roll with degrees specified by radius
       Nsamp = 1 + T / dt;
-      data = zeros(Nsamp, 26);
+      data = zeros(Nsamp, 29);
 
       gx = 0;
       gy = 0;
       gz = 0;
       
-      quatc = quaternion(1);
-##      quatc = wind_correction(state, wind);
-##      dp = hamilton_product((state.quat*quatc), [1 0 0] * state.spd * dt) + wind * dt;
-      dtheta = deg2rad(radius) * dt / T;
+      quatc = wind_correctionE(state, wind);
+      dtheta = deg2rad(radius) / Nsamp;
       dquat = rot2q([1 0 0], dtheta);
 
       for i = 1:Nsamp
         data = writeRes(data, i, noise, pThresh, origin, rhdg,
                  state, gx, gy, gz, quatc);
                  
-        dp = hamilton_product((state.quat*quatc), [1 0 0] * state.spd * dt) + wind * dt;
-        
+        dp = hamilton_product((quatc*state.quat), [1 0 0] * state.spd * dt) + wind * dt;
         state.pos += dp;
         
         # update attitude
-        state.quat = unit(state.quat * dquat); # rotate in body frame
+        state.quat = unit(state.quat * dquat); # roll in body frame
+        quatc = wind_correctionE(state, wind);
       endfor
         
     otherwise
@@ -123,32 +130,80 @@ function [state data] = pattern_maneuver(maneuver, radius, T, dt, state,
   disp(status_string);
 endfunction
 
-function quatc = wind_correction(state, wind)
-  do_wind_comp = 1;
-  persistent csign=0;
+##function quatc = wind_correction(state, wind)
+##  do_wind_comp = 1;
+##  persistent csign=0;
+##  
+##  if do_wind_comp
+##    # desired earth-frame heading is parallel to rhdg
+##    # wind correction to attitude cancels crosswind component        
+##    # earth-frame air velocity unit vector
+##    avel = hamilton_product(state.quat, [1 0 0]);
+##    
+##    # crosswind component
+##    xwind = vectorNorm(cross(wind, avel));
+##    
+##    # compute yaw correction required to compensate crosswind
+##    # This is a body-frame rotation 
+##    yawCor = atan2(xwind, state.spd);
+##    if (csign == 0)
+##      csign = sign(yawCor);
+##    else
+##      if (csign != sign(yawCor))
+##        yawCor
+##        csign = sign(yawCor);
+##      endif
+##    endif
+##    quatc = rot2q([0 0 1], -yawCor);
+##  else
+##    quatc = quaternion(1);
+##  endif
+##endfunction
+
+##function quatc = wind_correctionB(state, wind)
+##  global do_wind_comp;
+##  
+##  quatc = quaternion(1);
+##  if do_wind_comp
+##    # desired flightpath in body frame
+##    bx = [1 0 0] * state.spd;
+##    # wind in body frame
+##    bw = hamilton_product(state.quat, wind);
+##    # uncorrected flightpath
+##    bxw = bx + bw;
+##    # axis of required rotation is perp to plane containing wind and des. path
+##    axis = cross(bx, bxw);
+##    # angle of rotation
+##    angle = asin(vectorNorm(axis) / (vectorNorm(bxw) * state.spd));
+##    if (angle > 1e-5)
+##      axis /= vectorNorm(axis);
+##      quatc = rot2q(axis, -angle);
+####      disp(sprintf("angle: %5.3f axis:[%5.3f %5.3f %5.3f]", 
+####                    angle, axis(1), axis(2), axis(3)));
+##    endif
+##  endif
+##endfunction
+
+function quatc = wind_correctionE(state, wind)
+  global do_wind_comp;
   
+  quatc = quaternion(1);
   if do_wind_comp
-    # desired earth-frame heading is parallel to rhdg
-    # wind correction to attitude cancels crosswind component        
-    # earth-frame air velocity unit vector
-    avel = hamilton_product(state.quat, [1 0 0]);
-    
-    # crosswind component
-    xwind = vectorNorm(cross(wind, avel));
-    
-    # compute yaw correction required to compensate crosswind
-    yawCor = atan2(xwind, state.spd);
-    if (csign == 0)
-      csign = sign(yawCor);
-    else
-      if (csign != sign(yawCor))
-        yawCor
-        csign = sign(yawCor);
-      endif
+    # desired flightpath in earth frame
+    ex = hamilton_product(state.quat, [1 0 0] * state.spd);
+    # wind in earth frame
+    # uncorrected flightpath
+    exw = ex + wind;
+    # axis of required rotation is perp to plane containing wind and des. path
+    axis = cross(exw, ex);
+    # angle of rotation
+    angle = asin(vectorNorm(axis) / (vectorNorm(exw) * state.spd));
+    if (angle > 1e-5)
+      axis /= vectorNorm(axis);
+      quatc = rot2q(axis, angle);
+##      disp(sprintf("angle: %5.3f axis:[%5.3f %5.3f %5.3f]", 
+##                    angle, axis(1), axis(2), axis(3)));
     endif
-    quatc = rot2q([0 0 1], -yawCor);
-  else
-    quatc = quaternion(1);
   endif
 endfunction
 
@@ -164,7 +219,7 @@ function data = writeRes(data, i, noise, pThresh, origin, rhdg,
   data(i,8:10) = [gx gy gz];
   
   # ATT: Euler fixed angles: RPY 
-  quat = unit(state.quat * quatc);
+  quat = unit(quatc * state.quat);
   [roll pitch yaw] = quat2euler([quat.w,quat.x,quat.y,quat.z]);
   # add noise
   n_roll = roll + 2 * noise * (rand - 0.5);
