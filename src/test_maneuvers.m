@@ -30,7 +30,7 @@ rollTolerance = 10;
 pThresh = 75;
 noise = 0; # degrees
 
-rhdg  = 30; # runway heading
+rhdg  = 0; # runway heading
 wind = [0 5 0]; # m/sec in earth frame
 
 pkg load quaternion
@@ -64,29 +64,18 @@ state.pos(1) = -state.spd * T;
 
 state.pos = (rE2runway' * state.pos')';
 
-radius = 90;
-pattern_maneuver('wind_comp_on', radius, T, dt,
+radius = 180;
+pattern_maneuver('wind_comp_off', radius, T, dt,
                  state, noise, pThresh, origin, rhdg, wind);
 
-##[state data] = pattern_maneuver('straight_line', radius, T, dt,
-##                           state, noise, pThresh, origin, rhdg, wind);
 [state data] = pattern_maneuver('roll', radius, T, dt,
                            state, noise, pThresh, origin, rhdg, wind);
 
 res = [res; data];
 
-# TODO: wind correction is backwards for roll=180
-##state.quat = euler2quat(0, 0, rhdg);
-
-##figure(3)
-##xyzr = lla2xyz(data(:,2:4), 0, origin);
-##plot(xyzr(:,1), xyzr(:,2), 'o');
-####axis equal
-##title('entry')
-
 maneuver = 'arc';
-radius = 50;
-arclen = .5 * 2 * pi * abs(radius);
+radius = -50;
+arclen = .25 * 2 * pi * abs(radius);
 T = arclen / state.spd;
 [state data] = pattern_maneuver(maneuver, radius, T, dt,
                               state, noise, pThresh, origin, rhdg, wind);
@@ -96,38 +85,25 @@ res = [res; data];
 X = [ones(length(data),1) data(:,27)];
 [beta sigma resid] = ols(data(:,28), X);
 
-##figure(4)
-##xyzr = lla2xyz(data(:,2:4), 0,origin);
-##plot3Dline(xyzr, 'o');
-##axis equal
-##title(regexprep(maneuver,'_',' '))
+T = 3;
+[state data] = pattern_maneuver('line', radius, T, dt,
+                           state, noise, pThresh, origin, rhdg, wind);
+res = [res; data];
 
 maneuver = 'arc';
-##radius /= 2;
-##arclen = 1 * 2 * pi * radius;
-##T = arclen / state.spd;
+radius /= -1;
+arclen = 0.25 * 2 * pi * abs(radius);
+T = arclen / state.spd;
 [state data] = pattern_maneuver(maneuver, radius, T, dt,
                               state, noise, pThresh, origin, rhdg, wind);
 res = [res; data];
 
-##figure(5)
-##xyzr = lla2xyz(data(:,2:4), 0,origin);
-##plot3Dline(xyzr, 'o');
-##axis equal
-##title(regexprep(maneuver,'_',' '))
-
-# straight and level exit
-state.quat = euler2quat(0, 0, rhdg);
+# exit
 T = 3;
-[state data] = pattern_maneuver('straight_line', radius, T, dt, 
+radius = -180;
+[state data] = pattern_maneuver('roll', radius, T, dt, 
                               state, noise, pThresh, origin, rhdg, wind);
 res = [res; data];
-
-##figure(6)
-##xyzr = lla2xyz(data(:,2:4), 0,origin);
-##plot(xyzr(:,1), xyzr(:,2), 'o');
-####axis equal
-##title('exit')
 
 figure(7)
 xyzr = res(:,27:29);
@@ -140,7 +116,7 @@ xlabel('East')
 ylabel('North')
 zlabel('Alt')
 
-return
+##return
 
 # add timestamp column
 Nsamp = length(res);

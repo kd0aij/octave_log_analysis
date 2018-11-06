@@ -38,6 +38,7 @@ function [state data] = pattern_maneuver(maneuver, radius, T, dt, state,
     # similarly allow finding the tilt. Next step is projecting the series onto
     # the plane determined by heading and tilt. In this plane, 
     
+    # an inside loop has a positive radius, outside loop has a negative radius
     case 'arc'
       status_string = [status_string sprintf(", radius: %5.1f", radius)];
       
@@ -76,8 +77,8 @@ function [state data] = pattern_maneuver(maneuver, radius, T, dt, state,
       endfor
       # final quaternion determines orientation at exit, except for yaw correction
       
-    case 'straight_line'
-      # T seconds straight line at current attitude
+    # straight line with current attitude
+    case 'line'
       Nsamp = 1 + T / dt;
       data = zeros(Nsamp, 29);
 
@@ -95,19 +96,19 @@ function [state data] = pattern_maneuver(maneuver, radius, T, dt, state,
         state.pos += dp;
       endfor
         
+    # straight line roll through degrees specified by radius
     case 'roll'
-      # T seconds straight line roll with degrees specified by radius
       Nsamp = 1 + T / dt;
       data = zeros(Nsamp, 29);
 
-      gx = 0;
-      gy = 0;
-      gz = 0;
-      
       quatc = wind_correctionE(state, wind);
       dtheta = deg2rad(radius) / Nsamp;
       dquat = rot2q([1 0 0], dtheta);
 
+      gx = rad2deg(dtheta) / dt;
+      gy = 0;
+      gz = 0;
+      
       for i = 1:Nsamp
         data = writeRes(data, i, noise, pThresh, origin, rhdg,
                  state, gx, gy, gz, quatc);
@@ -123,7 +124,7 @@ function [state data] = pattern_maneuver(maneuver, radius, T, dt, state,
     otherwise
       disp("usage: testEulerAngles(maneuver)");
       disp("where maneuver is one of:")
-      disp("loop, rolling_loop, 4_point_rolling_loop");
+      disp("arc, line, roll");
       return
     
   endswitch
