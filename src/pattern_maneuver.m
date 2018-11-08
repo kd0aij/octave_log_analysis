@@ -1,4 +1,4 @@
-function [state data] = pattern_maneuver(maneuver, radius, T, dt, state, 
+function [state data] = pattern_maneuver(maneuver, radius, angle, T, dt, state, 
                                          noise, pThresh, origin, rhdg, wind)
   # state comprises attitude quaternion, ECEF position and speed in a structure
   # rhdg is desired ground heading
@@ -8,8 +8,8 @@ function [state data] = pattern_maneuver(maneuver, radius, T, dt, state,
   global do_wind_comp = 1;
   
   [roll pitch yaw] = quat2euler(state.quat);
-  status_string = sprintf("maneuver: %15s RPY: %5.1f, %5.1f, %5.1f, T: %5.1f", 
-                          maneuver, roll, pitch, yaw, T);
+  disp(sprintf("maneuver: %10s RPY: %5.1f, %5.1f, %5.1f, T: %5.1f, r: %5.1f, a: %5.1f", 
+                          maneuver, roll, pitch, yaw, T, radius, angle));
   switch (maneuver)
     case 'wind_comp_on'
       do_wind_comp = 1;
@@ -38,30 +38,34 @@ function [state data] = pattern_maneuver(maneuver, radius, T, dt, state,
     # similarly allow finding the tilt. Next step is projecting the series onto
     # the plane determined by heading and tilt. In this plane, 
     
-    # an inside loop has a positive radius, outside loop has a negative radius
+    # an inside loop has a positive angle, outside loop has a negative angle
     case 'arc'
-      status_string = [status_string sprintf(", radius: %5.1f", radius)];
+     
+      arclen = 2 * pi * radius / deg2rad(abs(angle));
+      [quatc s_factor] = wind_correctionE(state, wind);
+      T = round(arclen / (s_factor*state.spd) / dt) * dt;
+
+      Nsamp = round(T / dt);
+      data = zeros(Nsamp, 29);
       
       # loop center (in x-z plane) is determined by initial orientation and position
       # project body-frame -Z axis to arc center
       ctr = radius * hamilton_product(state.quat, [0 0 -1]) + state.pos;
       
+      
       # speed spd in m/sec
       # gy in rad/sec (pitch rate)
-      gy = state.spd / radius;
-      dtheta = gy * dt;
+      gy = deg2rad(angle) / T;
+      dtheta = deg2rad(angle) / Nsamp;
 
-      Nsamp = 1 + T / dt;
-      data = zeros(Nsamp, 29);
       gx = 0;
       gz = 0;
       
       dquat = rot2q([0 1 0], -dtheta);
-      quatc = wind_correctionE(state, wind);
         
-      for i = 1:Nsamp
+      for index = 1:Nsamp
         # write current state
-        data = writeRes(data, i, noise, pThresh, origin, rhdg,
+        data = writeRes(data, index, noise, pThresh, origin, rhdg,
                         state, gx, gy, gz, quatc);
                  
         # update position by converting velocity to earth frame and adding wind
@@ -70,16 +74,17 @@ function [state data] = pattern_maneuver(maneuver, radius, T, dt, state,
         
         # update attitude
         state.quat = unit(state.quat * dquat); # rotate pitch in body frame
+##        state.quat = unit(dquat * state.quat); # rotate pitch in earth frame
         # state.quat must represent desired flight path
 ##        state.quat = unit(quatc * state.quat); 
         # required for wind_correctionE
-        quatc = wind_correctionE(state, wind);
+        [quatc s_factor] = wind_correctionE(state, wind);
       endfor
       # final quaternion determines orientation at exit, except for yaw correction
       
     # straight line with current attitude
     case 'line'
-      Nsamp = 1 + T / dt;
+      Nsamp = T / dt;
       data = zeros(Nsamp, 29);
 
       gx = 0;
@@ -89,28 +94,28 @@ function [state data] = pattern_maneuver(maneuver, radius, T, dt, state,
       quatc = wind_correctionE(state, wind);
       dp = hamilton_product((quatc*state.quat), [1 0 0] * state.spd * dt) + wind * dt;
 
-      for i = 1:Nsamp
-        data = writeRes(data, i, noise, pThresh, origin, rhdg,
+      for index = 1:Nsamp
+        data = writeRes(data, index, noise, pThresh, origin, rhdg,
                  state, gx, gy, gz, quatc);
 
         state.pos += dp;
       endfor
         
-    # straight line roll through degrees specified by radius
+    # straight line roll through degrees specified by angle
     case 'roll'
-      Nsamp = 1 + T / dt;
+      Nsamp = T / dt;
       data = zeros(Nsamp, 29);
 
       quatc = wind_correctionE(state, wind);
-      dtheta = deg2rad(radius) / Nsamp;
+      dtheta = deg2rad(angle) / Nsamp;
       dquat = rot2q([1 0 0], dtheta);
 
       gx = rad2deg(dtheta) / dt;
       gy = 0;
       gz = 0;
       
-      for i = 1:Nsamp
-        data = writeRes(data, i, noise, pThresh, origin, rhdg,
+      for index = 1:Nsamp
+        data = writeRes(data, index, noise, pThresh, origin, rhdg,
                  state, gx, gy, gz, quatc);
                  
         dp = hamilton_product((quatc*state.quat), [1 0 0] * state.spd * dt) + wind * dt;
@@ -118,7 +123,7 @@ function [state data] = pattern_maneuver(maneuver, radius, T, dt, state,
         
         # update attitude
         state.quat = unit(state.quat * dquat); # roll in body frame
-        quatc = wind_correctionE(state, wind);
+##        quatc = wind_correctionE(state, wind);
       endfor
         
     otherwise
@@ -128,7 +133,8 @@ function [state data] = pattern_maneuver(maneuver, radius, T, dt, state,
       return
     
   endswitch
-  disp(status_string);
+  disp(sprintf("end maneuver: %6s RPY: %5.1f, %5.1f, %5.1f", 
+                          maneuver, roll, pitch, yaw));
 endfunction
 
 ##function quatc = wind_correction(state, wind)
@@ -185,7 +191,7 @@ endfunction
 ##  endif
 ##endfunction
 
-function quatc = wind_correctionE(state, wind)
+function [quatc s_factor] = wind_correctionE(state, wind)
   global do_wind_comp;
   
   quatc = quaternion(1);
@@ -199,25 +205,27 @@ function quatc = wind_correctionE(state, wind)
     axis = cross(exw, ex);
     # angle of rotation
     angle = asin(vectorNorm(axis) / (vectorNorm(exw) * state.spd));
-    if (angle > 1e-5)
+    s_factor = vectorNorm(ex) / vectorNorm(exw);
+    if (angle > 1e-9)
       axis /= vectorNorm(axis);
       quatc = rot2q(axis, angle);
-##      disp(sprintf("angle: %5.3f axis:[%5.3f %5.3f %5.3f]", 
-##                    angle, axis(1), axis(2), axis(3)));
+##      disp(sprintf("angle: %5.3f axis:[%5.3f %5.3f %5.3f], s_factor: %5.3f", 
+##                    angle, axis(1), axis(2), axis(3), s_factor));
     endif
   endif
 endfunction
 
-function data = writeRes(data, i, noise, pThresh, origin, rhdg,
+function data = writeRes(data, index, noise, pThresh, origin, rhdg,
                   state, gx, gy, gz, quatc)
                   
   persistent avgYaw;
   
   # position in meters
-  data(i,27:29) = state.pos;
+  pnoise = 2 * noise * (rand(1,3) - 0.5);
+  data(index,27:29) = state.pos + pnoise;
                 
   # gyros (deg/sec)
-  data(i,8:10) = [gx gy gz];
+  data(index,8:10) = [gx gy gz];
   
   # ATT: Euler fixed angles: RPY 
   quat = unit(quatc * state.quat);
@@ -227,10 +235,10 @@ function data = writeRes(data, i, noise, pThresh, origin, rhdg,
   n_pitch = pitch + 0 * rand;
   n_yaw = yaw + 0 * rand;
   
-  data(i,5:7) = [n_roll wrappedPitch(n_pitch) n_yaw];
+  data(index,5:7) = [n_roll wrappedPitch(n_pitch) n_yaw];
 
   # synthetic quaternion Q1-4
-  data(i,17:20) = [quat.w quat.i quat.j quat.k];
+  data(index,17:20) = [quat.w quat.i quat.j quat.k];
 
   # corrected Euler RPY
   # handle Euler roll/yaw indeterminacy on vertical lines
@@ -240,8 +248,59 @@ function data = writeRes(data, i, noise, pThresh, origin, rhdg,
     avgYaw = yaw;
   endif
   avgYaw = wrap(avgYaw);
-  [r p y] = attFromQuat(data(i,17:20), avgYaw, pThresh);
-  data(i,24:26) = [r p y];
+  [r p y] = attFromQuat(data(index,17:20), avgYaw, pThresh);
+  
+  # given the maneuver heading: rhdg
+  # calculate roll angle as angle between rhdg/earthz plane and body x/y plane
+  hv = [cos(rhdg) sin(rhdg) 0];
+  
+  # this hzplane requires maneuvers to lie in a vertical plane
+  hzplane = [-sind(rhdg) cosd(rhdg) 0];
+  
+  bx = hamilton_product(quat, [1 0 0]);
+
+  # a more general version would allow the maneuver plane to be non-vertical
+  # where mplane is (hv cross earthz) rotated about hv by a roll angle
+##  hzplane = cross(hv, mplane);  
+
+##  # first rotate body x around heading vector till it's parallel with
+##  # hzplane (perpendicular to plane normal hzplane)
+##  # project bx into plane normal to hzplane and rotate in this plane
+##  bparhv = cross(hv, (cross(bx, hv)));
+####  bprphv = dot(bx, hv);
+##  
+##  # (R(hv,theta) * bx) cross hzplane = 0
+##  theta = acos(vectorNorm(bparhv));  
+##  r2hzp = rot2q(hv, theta);
+##  
+##  by = hamilton_product(quat, [0 1 0]);
+
+  # the wind correction angle (WCA) relative to flight path is the
+  # angle between body frame x and hzplane
+  # This should be independent of roll and pitch: roll does not affect the direction
+  # of bx and pitch is a rotation about hzplane, which does not change the angle
+  wca_axis = cross(bx, hzplane);
+  wca = 90 - asind(vectorNorm(wca_axis));
+  
+  # to back out wca, rotate about axis cross(bx, hzplane) 
+  wca_axis = wca_axis / vectorNorm(wca_axis);
+  r2hzp = rot2q(wca_axis, deg2rad(real(wca)));
+
+  # roll is zero when plane of wings is perpendicular to maneuver plane
+  # rotate 
+  # This is wrong when yawc is nonzero; need to back out quatc here...
+  # but that is not known 
+##  bxp = hamilton_product(r2hzp, bx);
+  
+  # perpendicular to body x-y plane transformed to earth frame
+  xyplane = hamilton_product(unit(r2hzp * quat), [0 0 1]);
+  
+  # angle between wing plane and maneuver plane
+  xy_cross_hz = cross(xyplane, hzplane);  
+  
+  rollc = 90 - asind(vectorNorm(xy_cross_hz));
+  
+  data(index,24:26) = [rollc p wca];
   
 ##  lat = origin(1) + m2dLat(yp);
 ##  lng = origin(2) + m2dLng(xp, origin(1));
@@ -249,7 +308,7 @@ function data = writeRes(data, i, noise, pThresh, origin, rhdg,
   lla = xyz2lla(state.pos, 0, origin);
   
   # POS, GPS
-  data(i,2:4) = [lla(1) lla(2) state.pos(3)];
-  data(i,21:23) = [lla(1) lla(2) state.pos(3)];
+  data(index,2:4) = [lla(1) lla(2) state.pos(3)];
+  data(index,21:23) = [lla(1) lla(2) state.pos(3)];
 endfunction
 

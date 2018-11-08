@@ -28,9 +28,9 @@ origin = [39.8420194 -105.2123333 1808];
 
 rollTolerance = 10;
 pThresh = 75;
-noise = 0; # degrees
+noise = 0; # degrees, meters
 
-rhdg  = 0; # runway heading
+rhdg  = 30; # runway heading
 wind = [0 5 0]; # m/sec in earth frame
 
 pkg load quaternion
@@ -52,7 +52,7 @@ state.pos = [0 150 origin(3)+30];
 state.spd = 30;
 T = 3;
 
-# roll and pitch on entry
+# init to straight & level
 roll  = 0;
 pitch = 0;
 
@@ -64,44 +64,66 @@ state.pos(1) = -state.spd * T;
 
 state.pos = (rE2runway' * state.pos')';
 
-radius = 180;
-pattern_maneuver('wind_comp_off', radius, T, dt,
+radius = 0;
+angle = 0;
+pattern_maneuver('wind_comp_on', radius, angle, T, dt,
                  state, noise, pThresh, origin, rhdg, wind);
 
-[state data] = pattern_maneuver('roll', radius, T, dt,
+# roll inverted
+angle = 180;
+[state data] = pattern_maneuver('roll', radius, angle, T, dt,
                            state, noise, pThresh, origin, rhdg, wind);
-
-res = [res; data];
-
-maneuver = 'arc';
-radius = -50;
-arclen = .25 * 2 * pi * abs(radius);
-T = arclen / state.spd;
-[state data] = pattern_maneuver(maneuver, radius, T, dt,
-                              state, noise, pThresh, origin, rhdg, wind);
 res = [res; data];
 
 # find heading by fitting a line to xy data
 X = [ones(length(data),1) data(:,27)];
-[beta sigma resid] = ols(data(:,28), X);
+[beta sigma] = ols(data(:,28), X)
+ehdg = atan2d(beta(2),1);
+figure(8)
+plot(data(:,27),data(:,28),data(:,27),beta(1)+beta(2)*data(:,27),'o')
+axis equal
+title(['heading fit: ' num2str(ehdg)])
 
-T = 3;
-[state data] = pattern_maneuver('line', radius, T, dt,
-                           state, noise, pThresh, origin, rhdg, wind);
-res = [res; data];
-
+# outside 1/4 loop
 maneuver = 'arc';
-radius /= -1;
-arclen = 0.25 * 2 * pi * abs(radius);
-T = arclen / state.spd;
-[state data] = pattern_maneuver(maneuver, radius, T, dt,
+radius = 50;
+angle = -90;
+[state data] = pattern_maneuver(maneuver, radius, angle, T, dt,
                               state, noise, pThresh, origin, rhdg, wind);
 res = [res; data];
 
-# exit
+# roll to right knife edge on vertical line
+T = 1;
+angle = 90;
+[state data] = pattern_maneuver('roll', radius, angle, T, dt,
+                           state, noise, pThresh, origin, rhdg, wind);
+res = [res; data];
+
+# hold knife-edge for 2 seconds
+T = 2;
+[state data] = pattern_maneuver('line', radius, angle, T, dt,
+                           state, noise, pThresh, origin, rhdg, wind);
+res = [res; data];
+
+# roll back inverted on vertical line
+T = 1;
+angle = -90;
+[state data] = pattern_maneuver('roll', radius, angle, T, dt,
+                           state, noise, pThresh, origin, rhdg, wind);
+res = [res; data];
+
+# pull through 1/4 loop to straight & level
+maneuver = 'arc';
+radius = 50;
+angle = 90;
+[state data] = pattern_maneuver(maneuver, radius, angle, T, dt,
+                              state, noise, pThresh, origin, rhdg, wind);
+res = [res; data];
+
+# exit with 180 roll to upright
 T = 3;
-radius = -180;
-[state data] = pattern_maneuver('roll', radius, T, dt, 
+angle = -180;
+[state data] = pattern_maneuver('roll', radius, angle, T, dt, 
                               state, noise, pThresh, origin, rhdg, wind);
 res = [res; data];
 
