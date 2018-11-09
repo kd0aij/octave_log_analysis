@@ -14,7 +14,6 @@ else
   endTime = segments{index1}(2) - 30;
 endif
 
-plot_tseg_color2(startTime, endTime, data, index1, label, ...
-  origin, levelThresh);
+plot_tseg_color2(startTime, endTime, data, index1, label);
 
 endfunction

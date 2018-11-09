@@ -1,6 +1,6 @@
 function plot_tseg_color2(startTime, endTime, data, ...
   fignum=1, label='', origin=[39.8420194 -105.2123333 1808], 
-  rollTolerance=15, posIndex=2, runwayNorth=16, pThresh=80, plotTitle='')
+  rollTolerance=15, posIndex=2, runwayNorth=-16, pThresh=80, plotTitle='')
   
 # data contains fields: 
 #         1    2    3    4     5      6    7
