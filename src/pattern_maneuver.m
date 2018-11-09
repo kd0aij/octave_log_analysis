@@ -7,16 +7,18 @@ function [state data] = pattern_maneuver(maneuver, radius, angle, T, dt, state,
   pkg load geometry;
   global do_wind_comp = 1;
   
-  [roll pitch yaw] = quat2euler(state.quat);
-  disp(sprintf("maneuver: %10s RPY: %5.1f, %5.1f, %5.1f, T: %5.1f, r: %5.1f, a: %5.1f", 
-                          maneuver, roll, pitch, yaw, T, radius, angle));
+##  [roll pitch yaw] = quat2euler(state.quat);
+##  disp(sprintf("maneuver: %10s RPY: %5.1f, %5.1f, %5.1f, T: %5.1f, r: %5.1f, a: %5.1f", 
+##                          maneuver, roll, pitch, yaw, T, radius, angle));
+  disp(sprintf("maneuver: %10s T: %5.1f, r: %5.1f, a: %5.1f wind_comp: %i", 
+                          maneuver, T, radius, angle, do_wind_comp));
   switch (maneuver)
     case 'wind_comp_on'
       do_wind_comp = 1;
     case 'wind_comp_off'
       do_wind_comp = 0;
      
-    # Correcting for a crosswind, demonstrates problems with Euler
+    # Correcting for a crosswind demonstrates problems with Euler
     # angle representation; the solution may be to back out the crosswind-induced
     # yaw angle.  That should transform the attitude to the zero-crosswind case
     # which has no significant problems except for the roll/yaw ambiguity on verticals.
@@ -38,10 +40,10 @@ function [state data] = pattern_maneuver(maneuver, radius, angle, T, dt, state,
     # similarly allow finding the tilt. Next step is projecting the series onto
     # the plane determined by heading and tilt. In this plane, 
     
-    # an inside loop has a positive angle, outside loop has a negative angle
+    # inside loop has a positive angle, outside loop has a negative angle
     case 'arc'
      
-      arclen = 2 * pi * radius / deg2rad(abs(angle));
+      arclen = radius * deg2rad(abs(angle));
       [quatc s_factor] = wind_correctionE(state, wind);
       T = round(arclen / (s_factor*state.spd) / dt) * dt;
 
@@ -62,6 +64,7 @@ function [state data] = pattern_maneuver(maneuver, radius, angle, T, dt, state,
       gz = 0;
       
       dquat = rot2q([0 1 0], -dtheta);
+      dbx = [1 0 0] * state.spd;
         
       for index = 1:Nsamp
         # write current state
@@ -69,8 +72,9 @@ function [state data] = pattern_maneuver(maneuver, radius, angle, T, dt, state,
                         state, gx, gy, gz, quatc);
                  
         # update position by converting velocity to earth frame and adding wind
-        dp = hamilton_product((quatc*state.quat), [1 0 0] * state.spd * dt) + wind * dt;
+        dp = (hamilton_product((quatc*state.quat), dbx) + wind) * dt;
         state.pos += dp;
+##        disp(sprintf("%5.3f %5.3f %5.3f ", state.pos(1), state.pos(2), state.pos(3)));
         
         # update attitude
         state.quat = unit(state.quat * dquat); # rotate pitch in body frame
@@ -79,6 +83,10 @@ function [state data] = pattern_maneuver(maneuver, radius, angle, T, dt, state,
 ##        state.quat = unit(quatc * state.quat); 
         # required for wind_correctionE
         [quatc s_factor] = wind_correctionE(state, wind);
+        
+##        [roll pitch yaw] = quat2euler(state.quat);
+##        disp(sprintf("in maneuver: %7s RPY: %5.1f, %5.1f, %5.1f", 
+##                                maneuver, roll, pitch, yaw));
       endfor
       # final quaternion determines orientation at exit, except for yaw correction
       
@@ -123,7 +131,10 @@ function [state data] = pattern_maneuver(maneuver, radius, angle, T, dt, state,
         
         # update attitude
         state.quat = unit(state.quat * dquat); # roll in body frame
-##        quatc = wind_correctionE(state, wind);
+
+##        [roll pitch yaw] = quat2euler(state.quat);
+##        disp(sprintf("in maneuver: %7s RPY: %5.1f, %5.1f, %5.1f", 
+##                                maneuver, roll, pitch, yaw));
       endfor
         
     otherwise
@@ -133,68 +144,16 @@ function [state data] = pattern_maneuver(maneuver, radius, angle, T, dt, state,
       return
     
   endswitch
-  disp(sprintf("end maneuver: %6s RPY: %5.1f, %5.1f, %5.1f", 
-                          maneuver, roll, pitch, yaw));
+##  [roll pitch yaw] = quat2euler(state.quat);
+##  disp(sprintf("end maneuver: %6s RPY: %5.1f, %5.1f, %5.1f", 
+##                          maneuver, roll, pitch, yaw));
 endfunction
-
-##function quatc = wind_correction(state, wind)
-##  do_wind_comp = 1;
-##  persistent csign=0;
-##  
-##  if do_wind_comp
-##    # desired earth-frame heading is parallel to rhdg
-##    # wind correction to attitude cancels crosswind component        
-##    # earth-frame air velocity unit vector
-##    avel = hamilton_product(state.quat, [1 0 0]);
-##    
-##    # crosswind component
-##    xwind = vectorNorm(cross(wind, avel));
-##    
-##    # compute yaw correction required to compensate crosswind
-##    # This is a body-frame rotation 
-##    yawCor = atan2(xwind, state.spd);
-##    if (csign == 0)
-##      csign = sign(yawCor);
-##    else
-##      if (csign != sign(yawCor))
-##        yawCor
-##        csign = sign(yawCor);
-##      endif
-##    endif
-##    quatc = rot2q([0 0 1], -yawCor);
-##  else
-##    quatc = quaternion(1);
-##  endif
-##endfunction
-
-##function quatc = wind_correctionB(state, wind)
-##  global do_wind_comp;
-##  
-##  quatc = quaternion(1);
-##  if do_wind_comp
-##    # desired flightpath in body frame
-##    bx = [1 0 0] * state.spd;
-##    # wind in body frame
-##    bw = hamilton_product(state.quat, wind);
-##    # uncorrected flightpath
-##    bxw = bx + bw;
-##    # axis of required rotation is perp to plane containing wind and des. path
-##    axis = cross(bx, bxw);
-##    # angle of rotation
-##    angle = asin(vectorNorm(axis) / (vectorNorm(bxw) * state.spd));
-##    if (angle > 1e-5)
-##      axis /= vectorNorm(axis);
-##      quatc = rot2q(axis, -angle);
-####      disp(sprintf("angle: %5.3f axis:[%5.3f %5.3f %5.3f]", 
-####                    angle, axis(1), axis(2), axis(3)));
-##    endif
-##  endif
-##endfunction
 
 function [quatc s_factor] = wind_correctionE(state, wind)
   global do_wind_comp;
   
   quatc = quaternion(1);
+  s_factor = 1;
   if do_wind_comp
     # desired flightpath in earth frame
     ex = hamilton_product(state.quat, [1 0 0] * state.spd);
@@ -213,6 +172,67 @@ function [quatc s_factor] = wind_correctionE(state, wind)
 ##                    angle, axis(1), axis(2), axis(3), s_factor));
     endif
   endif
+endfunction
+
+function [roll pitch r2hzp] = maneuver_roll_pitch(rhdg, quat)
+  # given the maneuver heading: rhdg
+  # calculate roll angle as angle between rhdg/earthz plane and body x/y plane
+  hv = [cosd(rhdg) sind(rhdg) 0];
+  
+  # this hzplane requires maneuvers to lie in a vertical plane
+  hzplane = [-sind(rhdg) cosd(rhdg) 0];
+  
+  bx = hamilton_product(quat, [1 0 0]);
+
+  # a more general version would allow the maneuver plane to be non-vertical
+  # where mplane is (hv cross earthz) rotated about hv by a roll angle
+##  hzplane = cross(hv, mplane);  
+
+##  # first rotate body x around heading vector till it's parallel with
+##  # hzplane (perpendicular to plane normal hzplane)
+##  # project bx into plane normal to hzplane and rotate in this plane
+##  bparhv = cross(hv, (cross(bx, hv)));
+####  bprphv = dot(bx, hv);
+##  
+##  # (R(hv,theta) * bx) cross hzplane = 0
+##  theta = acos(vectorNorm(bparhv));  
+##  r2hzp = rot2q(hv, theta);
+##  
+##  by = hamilton_product(quat, [0 1 0]);
+
+  # the wind correction angle (WCA) relative to flight path is the
+  # angle between body frame x and hzplane
+  # This should be independent of roll and pitch: roll does not affect the direction
+  # of bx and pitch is a rotation about hzplane, which does not change the angle
+  wca_axis = cross(bx, hzplane);
+  wca = 90 - asind(vectorNorm(wca_axis));
+  
+  # to back out wca, rotate about axis cross(bx, hzplane) 
+  wca_axis = wca_axis / vectorNorm(wca_axis);
+  # this will be inv(quatc) if correct
+  r2hzp = rot2q(wca_axis, deg2rad(real(wca)));
+  # this is the attitude with body x aligned to maneuver heading
+  fquat = unit(r2hzp * quat);
+  bxchz = cross(hamilton_product(fquat, [1 0 0]), hzplane);
+
+  # roll is zero when plane of wings is perpendicular to maneuver plane
+  
+  # perpendicular to body x-z plane transformed to earth frame
+  xyplane = hamilton_product(fquat, [0 1 0]);
+  
+  # angle between wing plane and maneuver plane
+  # This isn't always the x component
+  xy_cross_hz = cross(hzplane, xyplane);
+  # try this to get the sign right
+  xy_cross_hz = sign(sum(xy_cross_hz)) * vectorNorm(xy_cross_hz);
+  
+  # angle between wing plane and maneuver plane
+  xydothz = dot(xyplane, hzplane);
+  
+  # this gives a range of [-180, 180] 
+  roll = atan2d(xy_cross_hz, xydothz);
+  
+  [r pitch y] = quat2euler(fquat);
 endfunction
 
 function data = writeRes(data, index, noise, pThresh, origin, rhdg,
@@ -250,57 +270,93 @@ function data = writeRes(data, index, noise, pThresh, origin, rhdg,
   avgYaw = wrap(avgYaw);
   [r p y] = attFromQuat(data(index,17:20), avgYaw, pThresh);
   
-  # given the maneuver heading: rhdg
-  # calculate roll angle as angle between rhdg/earthz plane and body x/y plane
-  hv = [cos(rhdg) sin(rhdg) 0];
-  
-  # this hzplane requires maneuvers to lie in a vertical plane
-  hzplane = [-sind(rhdg) cosd(rhdg) 0];
-  
-  bx = hamilton_product(quat, [1 0 0]);
+  [rollc pitchc r2hzp] = maneuver_roll_pitch(rhdg, quat);
+  testq = r2hzp*quatc;
+  testc = arg(testq) > 1e-6;
+  if testc
+    disp("error: r2hzp not inverse of quatc");
+    arg(testq)
+    testq
+    quatc
+    r2hzp
+  endif
 
-  # a more general version would allow the maneuver plane to be non-vertical
-  # where mplane is (hv cross earthz) rotated about hv by a roll angle
-##  hzplane = cross(hv, mplane);  
-
-##  # first rotate body x around heading vector till it's parallel with
-##  # hzplane (perpendicular to plane normal hzplane)
-##  # project bx into plane normal to hzplane and rotate in this plane
-##  bparhv = cross(hv, (cross(bx, hv)));
-####  bprphv = dot(bx, hv);
+##  # given the maneuver heading: rhdg
+##  # calculate roll angle as angle between rhdg/earthz plane and body x/y plane
+##  hv = [cosd(rhdg) sind(rhdg) 0];
 ##  
-##  # (R(hv,theta) * bx) cross hzplane = 0
-##  theta = acos(vectorNorm(bparhv));  
-##  r2hzp = rot2q(hv, theta);
+##  # this hzplane requires maneuvers to lie in a vertical plane
+##  hzplane = [-sind(rhdg) cosd(rhdg) 0];
 ##  
-##  by = hamilton_product(quat, [0 1 0]);
-
-  # the wind correction angle (WCA) relative to flight path is the
-  # angle between body frame x and hzplane
-  # This should be independent of roll and pitch: roll does not affect the direction
-  # of bx and pitch is a rotation about hzplane, which does not change the angle
-  wca_axis = cross(bx, hzplane);
-  wca = 90 - asind(vectorNorm(wca_axis));
-  
-  # to back out wca, rotate about axis cross(bx, hzplane) 
-  wca_axis = wca_axis / vectorNorm(wca_axis);
-  r2hzp = rot2q(wca_axis, deg2rad(real(wca)));
-
-  # roll is zero when plane of wings is perpendicular to maneuver plane
-  # rotate 
-  # This is wrong when yawc is nonzero; need to back out quatc here...
-  # but that is not known 
-##  bxp = hamilton_product(r2hzp, bx);
-  
-  # perpendicular to body x-y plane transformed to earth frame
-  xyplane = hamilton_product(unit(r2hzp * quat), [0 0 1]);
-  
-  # angle between wing plane and maneuver plane
-  xy_cross_hz = cross(xyplane, hzplane);  
-  
-  rollc = 90 - asind(vectorNorm(xy_cross_hz));
-  
-  data(index,24:26) = [rollc p wca];
+##  bx = hamilton_product(quat, [1 0 0]);
+##
+##  # a more general version would allow the maneuver plane to be non-vertical
+##  # where mplane is (hv cross earthz) rotated about hv by a roll angle
+####  hzplane = cross(hv, mplane);  
+##
+####  # first rotate body x around heading vector till it's parallel with
+####  # hzplane (perpendicular to plane normal hzplane)
+####  # project bx into plane normal to hzplane and rotate in this plane
+####  bparhv = cross(hv, (cross(bx, hv)));
+######  bprphv = dot(bx, hv);
+####  
+####  # (R(hv,theta) * bx) cross hzplane = 0
+####  theta = acos(vectorNorm(bparhv));  
+####  r2hzp = rot2q(hv, theta);
+####  
+####  by = hamilton_product(quat, [0 1 0]);
+##
+##  # the wind correction angle (WCA) relative to flight path is the
+##  # angle between body frame x and hzplane
+##  # This should be independent of roll and pitch: roll does not affect the direction
+##  # of bx and pitch is a rotation about hzplane, which does not change the angle
+##  wca_axis = cross(bx, hzplane);
+##  wca = 90 - asind(vectorNorm(wca_axis));
+##  
+##  # to back out wca, rotate about axis cross(bx, hzplane) 
+##  wca_axis = wca_axis / vectorNorm(wca_axis);
+##  # this will be inv(quatc) if correct
+##  r2hzp = rot2q(wca_axis, deg2rad(real(wca)));
+##  
+##  if arg(r2hzp*quatc) > 1e-9
+##    disp("error: r2hzp not inverse of quatc")
+##    bx
+##    wca_axis
+##    r2hzp
+##  endif
+##
+##  bxchz = cross(hamilton_product(unit(r2hzp * quat), [1 0 0]), hzplane);
+##
+####    # back out wind correction
+####    aq = r2hzp * quat;
+####    [r p y] = quat2euler(aq)
+####    # back out pitch
+####    aq = unit(inv(rot2q([0,1,0],deg2rad(p))) * aq);
+####    # remaining rotation is roll
+####    [axisr, thetar] = q2rot(aq)
+####    
+####  rollc = rad2deg(thetar);   
+##
+##  # roll is zero when plane of wings is perpendicular to maneuver plane
+##  
+##  # perpendicular to body x-z plane transformed to earth frame
+##  xyplane = hamilton_product(unit(r2hzp * quat), [0 1 0]);
+##  
+##  # angle between wing plane and maneuver plane
+##  # This isn't always the x component
+##  xy_cross_hz = cross(hzplane, xyplane);
+##  # try this to get the sign right
+##  xy_cross_hz = sign(sum(xy_cross_hz)) * vectorNorm(xy_cross_hz)
+##  
+####  # man. plane unit normal
+####  mplaneN = xy_cross_hz / vectorNorm(xy_cross_hz);
+##  # angle between wing plane and maneuver plane
+##  xydothz = dot(xyplane, hzplane);
+##  
+##  # this gives a range of [-180, 180] 
+##  rollc = atan2d(xy_cross_hz, xydothz);
+##  
+  data(index,24:26) = [rollc pitchc y];
   
 ##  lat = origin(1) + m2dLat(yp);
 ##  lng = origin(2) + m2dLng(xp, origin(1));
