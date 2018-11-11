@@ -17,7 +17,7 @@ function res = alignData(POS, GPS, ATT, IMU, NKF1, NKQ1)
 # 5:7)Roll, Pitch, Yaw, 
 # 8:10)GyrX, GyrY, GyrZ, 
 # 11:13)AccX, AccY, AccZ, 
-# 14:16)VE, VN, VD, 
+# 14:16)VN, VE, VD, 
 # 17:20)Q1-4, 
 # 21:23)(raw GPS)Lat, Lng, Alt, (sample-replicated from 5Hz to 25Hz)
 # 24:26)(corrected Euler)Roll, Pitch, Yaw
@@ -68,7 +68,7 @@ e_its = s_its + Nsamp*istep - 1;
 e_nts = s_nts + Nsamp*nstep - 1;
 e_qts = s_qts + Nsamp*qstep - 1;
 
-res = zeros(Nsamp, 26);
+res = zeros(Nsamp, 23);
 # timestamp
 res(1:Nsamp,1) = pts(s_pts:pstep:e_pts);
 
@@ -81,7 +81,7 @@ res(1:Nsamp,5:7) = ATT.data(s_ats:astep:e_ats,4:2:8);
 # Gyro X/Y/Z,  Acc X/Y/Z
 res(1:Nsamp,8:13) = IMU.data(s_its:istep:e_its,3:8);
 
-# VE, VN, VD
+# VN, VE, VD
 res(1:Nsamp,14:16) = NKF1.data(s_nts:nstep:e_nts,6:8);
 
 # Q1-4
@@ -101,25 +101,37 @@ while (j < length(gts))
   j += 1;
 endwhile
 
-# corrected Euler RPY
-# handle Euler roll/yaw indeterminacy on vertical lines
-# convert quaternion to Euler angles; pitch threshold for vertical is 60 degrees 
-avgYaw = hdg2yaw(res(1,7));
-vThresh = 85;
-for i=1:Nsamp
-  t = res(i,1);
-  # track average yaw while abs(pitch) < vThresh
-  pitch = res(i,6);
-  yaw = hdg2yaw(res(i,7));
-  if abs(pitch) < vThresh
-    avgYaw += .2 * (yaw - avgYaw);
-  endif
-  [r p y] = attFromQuat(res(i,17:20), avgYaw, vThresh);
-  if (t > 385) && (t < 386)
-    printf("%5.3f: avgYaw: %5.3f, roll: %5.3f, pitch: %5.3f, yaw: %5.3f\n", t, avgYaw, r, p, y);
-  endif
-  res(i,24:26) = [r p y];
-endfor
+### corrected Euler RPY
+### handle Euler roll/yaw indeterminacy on vertical lines
+### convert quaternion to Euler angles; pitch threshold for vertical is 60 degrees 
+####avgYaw = hdg2yaw(res(1,7));
+##vThresh = 70;
+##for i=1:Nsamp
+####for i=3220:3240
+####  t = res(i,1);
+####  # track average yaw while abs(pitch) < vThresh
+####  pitch = res(i,6);
+####  yaw = hdg2yaw(res(i,7));
+####  if abs(pitch) < vThresh
+####    avgYaw += .2 * (yaw - avgYaw);
+####  endif
+####  [r p y] = attFromQuat(res(i,17:20), avgYaw, vThresh)
+####  res(i,24:26) = [r p y];
+##
+### this heading needs to be based on ground track in order to work for horizontal
+### maneuvers e.g. circles.  It might also be desirable to use actual entry heading
+### for vertical maneuvers to account for them being flown not quite parallel to
+### the runway. A separate output could indicate the deviation from parallel.
+##  [roll pitch yaw] = quat2euler(res(i,17:20));
+##  # if on a vertical line, use runway heading for yaw; this will be wrong
+##  # for lateral maneuvers
+##  if abs(pitch) > vThresh
+##    rhdg = 90-16; # East is zero degrees for maneuver_roll_pitch()
+##    [roll pitch r2hzp] = maneuver_roll_pitch(-rhdg, res(i,17:20));
+##    yaw = rhdg;
+##  endif
+##  res(i,24:26) = [roll pitch yaw];
+##endfor
 
 endfunction
 

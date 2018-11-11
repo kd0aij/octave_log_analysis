@@ -53,19 +53,32 @@ xyzr = lla2xyz([lat lon z], -runwayNorth, origin);
 # roll range is (-180,180] degrees
 ##roll  = data(startIndex:endIndex,5);
 ##pitch = data(startIndex:endIndex,6);
-##yaw   = data(startIndex:endIndex,7);
-roll  = data(startIndex:endIndex,24);
-pitch = data(startIndex:endIndex,25);
-yaw   = data(startIndex:endIndex,26);
-
+roll  = zeros(length(lat), 1);
+pitch = zeros(length(lat), 1);
+hdg   = data(startIndex:endIndex,7);
 # convert hdg from [0,360] (positive CW) to 
-# [180,-180] (positive CCW) (with North at 0)
-for i = 1:length(yaw)
-  if yaw(i) > 180
-    yaw(i) = 360 - yaw(i);
-  else
-    yaw(i) = -yaw(i);
+# [180,-180] (positive CW) (with North at 0)
+yaw = hdg2yaw(hdg);
+
+##roll  = data(startIndex:endIndex,24);
+##pitch = data(startIndex:endIndex,25);
+##yaw   = data(startIndex:endIndex,26);
+
+# compute roll/pitch in maneuver plane
+odx = 1;
+persistent rhdg = 0;
+for idx = startIndex:endIndex
+  [roll(odx) pitch(odx)] = maneuver_roll_pitch(rhdg, data(idx,17:20));
+  if abs(pitch(odx)) > 80
+    disp(sprintf("pitch: %5.1f, course: %5.1f, gspd: %5.1f, spd: %5.1f",
+            pitch(odx), rhdg, 
+            vectorNorm(data(idx,14:15)), vectorNorm(data(idx,14:16))));
   endif
+  if abs(pitch(odx)) < 45
+    # specify maneuver plane heading as current ground course
+    rhdg = atan2d(data(idx,15),data(idx,14));
+  endif
+  ++odx;
 endfor
 
 colors = ones(length(roll),3);
@@ -105,6 +118,16 @@ thacks = [];
 for i = 1:125:length(tsp)
   thacks = [thacks tsp(i)];
 endfor
+
+figure(7)
+plot3Dline(xyzr, 'o');
+axis equal
+grid on
+rotate3d on
+title('full')
+xlabel('East')
+ylabel('North')
+zlabel('Alt')
 
 fignum
 figure(fignum, 'position', [100,100,800,800])
@@ -157,16 +180,19 @@ xlabel "time"
 ylabel "degrees)"
 legend("roll","pitch","yaw")
 
+uroll = rad2deg(unwrap(deg2rad(roll)));
+uyaw = (180/pi)*unwrap(yaw*pi/180);
+
 figure(fignum+1, 'position', [900,100,800,800])
 subplot(2,1,1)
-plot(tsp, (180/pi)*unwrap(roll*pi/180), '.-r', tsp, pitch, '.-k', tsp, (180/pi)*unwrap(yaw*pi/180), '.-m');
+plot(tsp, uroll, '.-r', tsp, pitch, '.-k', tsp, uyaw, '.-m');
 # highlight abs(pitch) > pThresh
 hold on
 xxx = find(abs(pitch)>pThresh);
 plot(tsp(xxx), pitch(xxx), 'ok');
 # highlight roll error > rollTolerance
 if length(rollErr) > 0
-  plot(tsp(rollErr), rad2deg(unwrap(deg2rad(roll(rollErr)))), 'or');
+  plot(tsp(rollErr), uroll(rollErr), 'or');
 endif
 limits=axis();
 xoffset = (limits(2)-limits(1))/(length(thacks)*4);
