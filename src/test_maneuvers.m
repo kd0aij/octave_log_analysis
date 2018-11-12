@@ -30,7 +30,14 @@ rollTolerance = 10;
 pThresh = 75;
 noise = 0; # degrees, meters
 
-rhdg  = 30; # runway heading
+# runway heading: this is the angle from the x axis, positive CCW
+# for rhdg=30, the runway number would be 6: compass heading of 60 degrees
+rhdg  = 30; 
+
+# pilotNorth is the direction the pilot is facing:
+# for rhdg=30, this is 30 degrees west of North: compass heading 330, yaw=-30
+pilotNorth = -30; 
+
 wind = [0 5 0]; # m/sec in earth frame
 
 pkg load quaternion
@@ -155,6 +162,6 @@ yawCor = rad2deg(atan2(vectorNorm(wind), state.spd));
 plot_title = sprintf("roll tolerance %d degrees, crosswind : %5.1f deg",
                      rollTolerance, yawCor);
 plot_tseg_color2(0, (Nsamp-1)*dt, res, 1, 'some_maneuvers',
-                 origin, rollTolerance, 2, rhdg, pThresh, plot_title);
+                 origin, rollTolerance, 2, pilotNorth, pThresh, plot_title);
 
 endfunction

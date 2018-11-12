@@ -1,6 +1,6 @@
 function plot_tseg_color2(startTime, endTime, data, ...
-  fignum=1, label='', origin=[39.8420194 -105.2123333 1808], 
-  rollTolerance=15, posIndex=2, runwayNorth=-16, pThresh=80, plotTitle='')
+  fignum=1, label='untitled', origin=[39.8420194 -105.2123333 1808], 
+  rollTolerance=15, posIndex=2, pilotNorth=16, pThresh=80, plotTitle='')
   
 # data contains fields: 
 #         1    2    3    4     5      6    7
@@ -32,10 +32,10 @@ endIndex = startIndex;
 while (ts(endIndex) < endTime)
   endIndex += 1;
 endwhile
+tsp = ts(startIndex:endIndex);
 ##printf("POS start/end indices: %d, %d\n", startIndex, endIndex);
 
 # extract gyro rate vectors
-tsp = ts(startIndex:endIndex);
 gx = data(startIndex:endIndex,8);
 gy = data(startIndex:endIndex,9);
 gz = data(startIndex:endIndex,10);
@@ -45,9 +45,17 @@ lat=data(startIndex:endIndex,posIndex);
 lon=data(startIndex:endIndex,posIndex+1);
 z = data(startIndex:endIndex,posIndex+2);
 
+# extract vNED and convert to vENU
+vNED = data(startIndex:endIndex,14:16);
+vENU = [vNED(:,2) vNED(:,1) -vNED(:,3)];
+
+# extract quaternion attitude
+quat = data(startIndex:endIndex,17:20);
+
 # convert to meters from origin
+xyz = lla2xyz([lat lon z], 0, origin);
 # and rotate parallel to runway
-xyzr = lla2xyz([lat lon z], -runwayNorth, origin);
+xyzr = lla2xyz([lat lon z], pilotNorth, origin);
 
 # assign colors representing roll angle
 # roll range is (-180,180] degrees
@@ -65,20 +73,56 @@ yaw = hdg2yaw(hdg);
 ##yaw   = data(startIndex:endIndex,26);
 
 # compute roll/pitch in maneuver plane
-odx = 1;
-persistent rhdg = 0;
-for idx = startIndex:endIndex
-  [roll(odx) pitch(odx)] = maneuver_roll_pitch(rhdg, data(idx,17:20));
-  if abs(pitch(odx)) > 80
-    disp(sprintf("pitch: %5.1f, course: %5.1f, gspd: %5.1f, spd: %5.1f",
-            pitch(odx), rhdg, 
-            vectorNorm(data(idx,14:15)), vectorNorm(data(idx,14:16))));
+mplanes = [];
+persistent rhdg = -pilotNorth;
+persistent onVertical = 0;
+for idx = 1:length(tsp)
+  [roll(idx) pitch(idx) wca] = maneuver_roll_pitch(rhdg, quat(idx,:));
+  if (not(onVertical) && (abs(pitch(idx)) > 80))
+    onVertical = 1;
+    # record maneuver plane
+    mplane.hdg = rhdg;
+    mplane.pos = xyz(idx,:);
+    mplanes = [mplanes mplane];
+    
+    disp(sprintf("t: %5.1f pitch: %3.1f, course: %4.1f, gspd: %3.1f, spd: %3.1f, wca: %3.1f",
+            tsp(idx), pitch(idx), rhdg, 
+            vectorNorm(vENU(idx,1:2)), vectorNorm(vENU(idx,:)),
+            wca));
+  elseif abs(pitch(idx)) < 45
+    onVertical = 0;
+    # specify maneuver heading as current ground course
+    # this is NED, so y is the first value
+    rhdg = atan2d(vENU(idx,1),vENU(idx,2));
   endif
-  if abs(pitch(odx)) < 45
-    # specify maneuver plane heading as current ground course
-    rhdg = atan2d(data(idx,15),data(idx,14));
-  endif
-  ++odx;
+endfor
+
+figure(7)
+plot3Dline(xyz, '-');
+axis equal
+grid on
+rotate3d on
+title('unrotated xyz')
+xlabel('East')
+ylabel('True North')
+zlabel('Alt')
+
+# plot maneuver plane: 50x50 meters, vertical, rotated to maneuver heading
+hold on
+limits=axis();
+for idx = 1:length(mplanes)
+  x = [0; 0];
+  y = [-50; 50];
+  # rotate to heading
+  theta = 180 - mplanes(idx).hdg;
+  xyr = [cosd(theta)*x.-sind(theta)*y, sind(theta)*x.+cosd(theta)*y];
+  # translate to vehicle position
+  xyr(:,1:2) += mplanes(idx).pos(1:2);
+  [xx yy] = meshgrid(xyr(:,1),xyr(:,2));
+  zz = [-50 -50; 50 50] + mplanes(idx).pos(3);
+  s1 = surf(xx,yy',zz, 'Edgecolor', 'none');
+  set(s1,'facealpha',0.2);
+##  shading interp;
 endfor
 
 colors = ones(length(roll),3);
@@ -118,16 +162,6 @@ thacks = [];
 for i = 1:125:length(tsp)
   thacks = [thacks tsp(i)];
 endfor
-
-figure(7)
-plot3Dline(xyzr, 'o');
-axis equal
-grid on
-rotate3d on
-title('full')
-xlabel('East')
-ylabel('North')
-zlabel('Alt')
 
 fignum
 figure(fignum, 'position', [100,100,800,800])

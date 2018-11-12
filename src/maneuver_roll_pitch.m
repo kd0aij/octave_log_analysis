@@ -1,4 +1,4 @@
-function [roll pitch r2hzp] = maneuver_roll_pitch(rhdg, quat)
+function [roll pitch wca wca_axis] = maneuver_roll_pitch(rhdg, quat)
   pkg load geometry;
   pkg load quaternion;
   # input q is an array [w x y z] or quaternion object: q.w q.i q.j q.k
@@ -18,18 +18,6 @@ function [roll pitch r2hzp] = maneuver_roll_pitch(rhdg, quat)
   # a more general version would allow the maneuver plane to be non-vertical
   # where mplane is (hv cross earthz) rotated about hv by a roll angle
 ##  hzplane = cross(hv, mplane);  
-
-##  # first rotate body x around heading vector till it's parallel with
-##  # hzplane (perpendicular to plane normal hzplane)
-##  # project bx into plane normal to hzplane and rotate in this plane
-##  bparhv = cross(hv, (cross(bx, hv)));
-####  bprphv = dot(bx, hv);
-##  
-##  # (R(hv,theta) * bx) cross hzplane = 0
-##  theta = acos(vectorNorm(bparhv));  
-##  r2hzp = rot2q(hv, theta);
-##  
-##  by = hamilton_product(quat, [0 1 0]);
 
   # the wind correction angle (WCA) relative to flight path is the
   # angle between body frame x and hzplane

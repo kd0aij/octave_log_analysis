@@ -66,9 +66,9 @@ function [state data] = pattern_maneuver(maneuver, radius, angle, T, dt, state,
       dquat = rot2q([0 1 0], -dtheta);
       dbx = [1 0 0] * state.spd;
         
-      for index = 1:Nsamp
+      for idx = 1:Nsamp
         # write current state
-        data = writeRes(data, index, noise, pThresh, origin, rhdg,
+        data = writeRes(data, idx, noise, pThresh, origin, rhdg,
                         state, gx, gy, gz, quatc);
                  
         # update position by converting velocity to earth frame and adding wind
@@ -102,8 +102,8 @@ function [state data] = pattern_maneuver(maneuver, radius, angle, T, dt, state,
       quatc = wind_correctionE(state, wind);
       dp = hamilton_product((quatc*state.quat), [1 0 0] * state.spd * dt) + wind * dt;
 
-      for index = 1:Nsamp
-        data = writeRes(data, index, noise, pThresh, origin, rhdg,
+      for idx = 1:Nsamp
+        data = writeRes(data, idx, noise, pThresh, origin, rhdg,
                  state, gx, gy, gz, quatc);
 
         state.pos += dp;
@@ -122,8 +122,8 @@ function [state data] = pattern_maneuver(maneuver, radius, angle, T, dt, state,
       gy = 0;
       gz = 0;
       
-      for index = 1:Nsamp
-        data = writeRes(data, index, noise, pThresh, origin, rhdg,
+      for idx = 1:Nsamp
+        data = writeRes(data, idx, noise, pThresh, origin, rhdg,
                  state, gx, gy, gz, quatc);
                  
         dp = hamilton_product((quatc*state.quat), [1 0 0] * state.spd * dt) + wind * dt;
@@ -174,17 +174,17 @@ function [quatc s_factor] = wind_correctionE(state, wind)
   endif
 endfunction
 
-function data = writeRes(data, index, noise, pThresh, origin, rhdg,
+function data = writeRes(data, idx, noise, pThresh, origin, rhdg,
                   state, gx, gy, gz, quatc)
                   
   persistent avgYaw;
   
   # position in meters
   pnoise = 2 * noise * (rand(1,3) - 0.5);
-  data(index,27:29) = state.pos + pnoise;
+  data(idx,27:29) = state.pos + pnoise;
                 
   # gyros (deg/sec)
-  data(index,8:10) = [gx gy gz];
+  data(idx,8:10) = [gx gy gz];
   
   # ATT: Euler fixed angles: RPY 
   quat = unit(quatc * state.quat);
@@ -194,33 +194,38 @@ function data = writeRes(data, index, noise, pThresh, origin, rhdg,
   n_pitch = pitch + 0 * rand;
   n_yaw = yaw + 0 * rand;
   
-  data(index,5:7) = [n_roll wrappedPitch(n_pitch) n_yaw];
+  data(idx,5:7) = [n_roll wrappedPitch(n_pitch) n_yaw];
+  
+  # VN, VE, VD
+  # TODO: this must be ENU, since x,y is east,north
+  vel3d = hamilton_product(state.quat, [1 0 0]) * state.spd;
+  data(idx,14:16) = vel3d;
 
   # synthetic quaternion Q1-4
-  data(index,17:20) = [quat.w quat.i quat.j quat.k];
+  data(idx,17:20) = [quat.w quat.i quat.j quat.k];
 
-  # corrected Euler RPY
-  # handle Euler roll/yaw indeterminacy on vertical lines
-  # convert quaternion to Euler angles; pitch threshold for vertical is pThresh 
-  if abs(wrappedPitch(pitch)) < pThresh
-##    avgYaw += .2 * (yaw - avgYaw);
-    avgYaw = yaw;
-  endif
-  avgYaw = wrap(avgYaw);
-  [r p y] = attFromQuat(data(index,17:20), avgYaw, pThresh);
-  
-  [rollc pitchc r2hzp] = maneuver_roll_pitch(rhdg, quat);
-  testq = r2hzp*quatc;
-  testc = arg(testq) > 1e-6;
-  if testc
-    disp("error: r2hzp not inverse of quatc");
-    arg(testq)
-    testq
-    quatc
-    r2hzp
-  endif
-
-  data(index,24:26) = [rollc pitchc y];
+##  # corrected Euler RPY
+##  # handle Euler roll/yaw indeterminacy on vertical lines
+##  # convert quaternion to Euler angles; pitch threshold for vertical is pThresh 
+##  if abs(wrappedPitch(pitch)) < pThresh
+####    avgYaw += .2 * (yaw - avgYaw);
+##    avgYaw = yaw;
+##  endif
+##  avgYaw = wrap(avgYaw);
+##  [r p y] = attFromQuat(data(idx,17:20), avgYaw, pThresh);
+##  
+##  [rollc pitchc r2hzp] = maneuver_roll_pitch(rhdg, quat);
+##  testq = r2hzp*quatc;
+##  testc = arg(testq) > 1e-6;
+##  if testc
+##    disp("error: r2hzp not inverse of quatc");
+##    arg(testq)
+##    testq
+##    quatc
+##    r2hzp
+##  endif
+##
+##  data(idx,24:26) = [rollc pitchc y];
   
 ##  lat = origin(1) + m2dLat(yp);
 ##  lng = origin(2) + m2dLng(xp, origin(1));
@@ -228,7 +233,7 @@ function data = writeRes(data, index, noise, pThresh, origin, rhdg,
   lla = xyz2lla(state.pos, 0, origin);
   
   # POS, GPS
-  data(index,2:4) = [lla(1) lla(2) state.pos(3)];
-  data(index,21:23) = [lla(1) lla(2) state.pos(3)];
+  data(idx,2:4) = [lla(1) lla(2) state.pos(3)];
+  data(idx,21:23) = [lla(1) lla(2) state.pos(3)];
 endfunction
 
