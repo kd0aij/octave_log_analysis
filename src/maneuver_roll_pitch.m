@@ -1,6 +1,4 @@
 function [roll pitch wca wca_axis] = maneuver_roll_pitch(rhdg, quat)
-  pkg load geometry;
-  pkg load quaternion;
   # input q is an array [w x y z] or quaternion object: q.w q.i q.j q.k
   if not(isa(quat,'quaternion') )
     q = quat;
@@ -32,7 +30,7 @@ function [roll pitch wca wca_axis] = maneuver_roll_pitch(rhdg, quat)
   r2hzp = rot2q(wca_axis, deg2rad(real(wca)));
   # this is the attitude with body x aligned to maneuver heading
   fq = unit(r2hzp * quat);
-  bxchz = cross(hamilton_product(fq, [1 0 0]), hzplane);
+##  bxchz = cross(hamilton_product(fq, [1 0 0]), hzplane);
   
   # calculate Euler pitch
   pitch = real(rad2deg( asin(2*(fq.w*fq.y - fq.z*fq.x))));
@@ -40,18 +38,20 @@ function [roll pitch wca wca_axis] = maneuver_roll_pitch(rhdg, quat)
   # roll is zero when plane of wings is perpendicular to maneuver plane
   
   # perpendicular to body x-z plane transformed to earth frame
-  xyplane = hamilton_product(fq, [0 1 0]);
+  xzplane = hamilton_product(fq, [0 1 0]);
   
-  # angle between wing plane and maneuver plane
-  # This isn't always the x component
-  xy_cross_hz = cross(hzplane, xyplane);
-  # try this to get the sign right
-  xy_cross_hz = sign(sum(xy_cross_hz)) * vectorNorm(xy_cross_hz);
+  # sine of angle between xzplane and maneuver plane (always positive: theta=[0,180]
+  xy_cross_hz = cross(hzplane, xzplane);
+  stheta = vectorNorm(xy_cross_hz);
   
-  # angle between wing plane and maneuver plane
-  xydothz = dot(xyplane, hzplane);
+  # cosine of angle between wing plane and maneuver plane
+  ctheta = dot(xzplane, hzplane);
   
-  # this gives a range of [-180, 180] 
-  roll = -atan2d(xy_cross_hz, xydothz);
+  if dot(xzplane, hv) > 0
+    # this gives a range of [0, 180] 
+    roll = atan2d(stheta, ctheta);
+  else
+    roll = -atan2d(stheta, ctheta);
+  endif
 endfunction
 

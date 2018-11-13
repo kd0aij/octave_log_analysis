@@ -3,8 +3,6 @@ function [state data] = pattern_maneuver(maneuver, radius, angle, T, dt, state,
   # state comprises attitude quaternion, ECEF position and speed in a structure
   # rhdg is desired ground heading
   # and wind is a velocity vector in earth frame 
-  pkg load quaternion;
-  pkg load geometry;
   global dont_wind_comp = 0;
   
 ##  [roll pitch yaw] = quat2euler(state.quat);
@@ -199,7 +197,9 @@ function data = writeRes(data, idx, noise, pThresh, origin, rhdg,
   # VN, VE, VD
   # TODO: this must be ENU, since x,y is east,north
   vel3d = hamilton_product(state.quat, [1 0 0]) * state.spd;
-  data(idx,14:16) = vel3d;
+  data(idx,14) = vel3d(2);
+  data(idx,15) = vel3d(1);
+  data(idx,16) = -vel3d(3);
 
   # synthetic quaternion Q1-4
   data(idx,17:20) = [quat.w quat.i quat.j quat.k];

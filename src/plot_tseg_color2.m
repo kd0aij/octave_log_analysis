@@ -1,6 +1,6 @@
 function plot_tseg_color2(startTime, endTime, data, ...
   fignum=1, label='untitled', origin=[39.8420194 -105.2123333 1808], 
-  rollTolerance=15, posIndex=2, pilotNorth=16, pThresh=80, plotTitle='')
+  rollTolerance=15, posIndex=2, pilotNorth=16, pThresh=65, plotTitle='')
   
 # data contains fields: 
 #         1    2    3    4     5      6    7
@@ -33,13 +33,10 @@ while (ts(endIndex) < endTime)
   endIndex += 1;
 endwhile
 tsp = ts(startIndex:endIndex);
-##printf("POS start/end indices: %d, %d\n", startIndex, endIndex);
+Nsamp = length(tsp)
 
 # extract gyro rate vectors
-gx = data(startIndex:endIndex,8);
-gy = data(startIndex:endIndex,9);
-gz = data(startIndex:endIndex,10);
-##[gx gy gz] = data(startIndex:endIndex,8:10);
+gv = data(startIndex:endIndex,8:10);
 
 lat=data(startIndex:endIndex,posIndex);
 lon=data(startIndex:endIndex,posIndex+1);
@@ -59,43 +56,79 @@ xyzr = lla2xyz([lat lon z], pilotNorth, origin);
 
 # assign colors representing roll angle
 # roll range is (-180,180] degrees
-##roll  = data(startIndex:endIndex,5);
-##pitch = data(startIndex:endIndex,6);
-roll  = zeros(length(lat), 1);
-pitch = zeros(length(lat), 1);
+roll  = zeros(Nsamp, 1);
+pitch = zeros(Nsamp, 1);
 hdg   = data(startIndex:endIndex,7);
 # convert hdg from [0,360] (positive CW) to 
 # [180,-180] (positive CW) (with North at 0)
 yaw = hdg2yaw(hdg);
 
-##roll  = data(startIndex:endIndex,24);
-##pitch = data(startIndex:endIndex,25);
-##yaw   = data(startIndex:endIndex,26);
+e_roll = data(startIndex:endIndex,5);
+e_pitch = data(startIndex:endIndex,6);
 
 # compute roll/pitch in maneuver plane
 mplanes = [];
-persistent rhdg = -pilotNorth;
+persistent chdg = pilotNorth + 90;
+disp(sprintf("Runway heading (CW from North) is %5.1f (East) / %5.1f (West)", 
+             chdg, 180+chdg));
 persistent onVertical = 0;
-for idx = 1:length(tsp)
-  [roll(idx) pitch(idx) wca] = maneuver_roll_pitch(rhdg, quat(idx,:));
-  if (not(onVertical) && (abs(pitch(idx)) > 80))
-    onVertical = 1;
-    # record maneuver plane
-    mplane.hdg = rhdg;
-    mplane.pos = xyz(idx,:);
-    mplanes = [mplanes mplane];
-    
-    disp(sprintf("t: %5.1f pitch: %3.1f, course: %4.1f, gspd: %3.1f, spd: %3.1f, wca: %3.1f",
-            tsp(idx), pitch(idx), rhdg, 
-            vectorNorm(vENU(idx,1:2)), vectorNorm(vENU(idx,:)),
-            wca));
-  elseif abs(pitch(idx)) < 45
-    onVertical = 0;
+avghdg = chdg;
+ghdg = chdg;
+then = time;
+for idx = 1:Nsamp
+  [roll(idx) pitch(idx) wca] = maneuver_roll_pitch(avghdg, quat(idx,:));
+  if onVertical
+    # hysteresis
+    if abs(pitch(idx)) < (pThresh - 2)
+      onVertical = 0;
+    endif
+  else
+    # while not on vertical line; update heading
+##    avghdg += .05 * (chdg - avghdg);
     # specify maneuver heading as current ground course
-    # this is NED, so y is the first value
-    rhdg = atan2d(vENU(idx,1),vENU(idx,2));
+    ghdg = atan2d(vENU(idx,1),vENU(idx,2)); 
+    if abs(wrap180(ghdg-chdg)) > 90
+      avghdg = wrap180(180+chdg); 
+    else
+      avghdg = chdg;
+    endif
+    
+    # vertical line if pitch > threshold
+    if abs(pitch(idx)) > pThresh
+      onVertical = 1;
+      # on entry to vertical line:
+      # record maneuver plane
+      mplane.hdg = avghdg;
+      mplane.pos = xyz(idx,:);
+      mplanes = [mplanes mplane];
+      
+      disp(sprintf("t: %5.1f pitch: %3.1f, course: %4.1f, gspd: %3.1f, vspd: %3.1f, wca: %3.1f",
+              tsp(idx), pitch(idx), chdg, 
+              vectorNorm(vENU(idx,1:2)), vectorNorm(vENU(idx,3)),
+              wca));
+    endif
   endif
+
+
+##  if (not(onVertical) && (abs(pitch(idx)) > pThresh))
+##    onVertical = 1;
+##    # record maneuver plane
+##    mplane.hdg = rhdg;
+##    mplane.pos = xyz(idx,:);
+##    mplanes = [mplanes mplane];
+##    
+##    disp(sprintf("t: %5.1f pitch: %3.1f, course: %4.1f, gspd: %3.1f, vspd: %3.1f, wca: %3.1f",
+##            tsp(idx), pitch(idx), rhdg, 
+##            vectorNorm(vENU(idx,1:2)), vectorNorm(vENU(idx,3)),
+##            wca));
+##  elseif abs(pitch(idx)) < pThresh
+##    onVertical = 0;
+##    # specify maneuver heading as current ground course
+##    # this is NED, so y is the first value
+##    rhdg = atan2d(vENU(idx,1),vENU(idx,2));
+##  endif
 endfor
+disp(sprintf("maneuver_roll_pitch elapsed time: %f", time-then));
 
 figure(7)
 plot3Dline(xyz, '-');
@@ -119,11 +152,16 @@ for idx = 1:length(mplanes)
   # translate to vehicle position
   xyr(:,1:2) += mplanes(idx).pos(1:2);
   [xx yy] = meshgrid(xyr(:,1),xyr(:,2));
-  zz = [-50 -50; 50 50] + mplanes(idx).pos(3);
-  s1 = surf(xx,yy',zz, 'Edgecolor', 'none');
+  zz = [-100 -100; 100 100] + mplanes(idx).pos(3);
+  s1 = surf(xx,yy',zz); #, 'Edgecolor', 'none');
   set(s1,'facealpha',0.2);
 ##  shading interp;
 endfor
+
+figure(8)
+plot(tsp, unwrapd(e_roll), 'o', tsp, unwrapd(roll), tsp, e_pitch, 'o', tsp, pitch)
+title('Euler RP vs. maneuver RP')
+legend(['eroll'; 'roll'; 'epitch'; 'pitch'])
 
 colors = ones(length(roll),3);
 red = hsv2rgb([0,1,1]);
@@ -134,33 +172,33 @@ blue = hsv2rgb([.60,1,1]);
 magenta = [1,0,1];
 rollErr = [];
 
-for i = 1:length(colors)
-  if abs(roll(i)) < rollTolerance
+for idx = 1:length(colors)
+  if rollCheck(roll(idx), e_roll(idx), 0, rollTolerance) #abs(roll(idx)) < rollTolerance
     # level
-    colors(i,:) = green;
-  elseif abs(roll(i)-180) < rollTolerance
+    colors(idx,:) = green;
+  elseif rollCheck(roll(idx), e_roll(idx), -180, rollTolerance) #abs(roll(idx)-180) < rollTolerance
     # inverted
-    colors(i,:) = greeni;
-  elseif abs(roll(i)+180) < rollTolerance
+    colors(idx,:) = greeni;
+  elseif rollCheck(roll(idx), e_roll(idx), 180, rollTolerance) #abs(roll(idx)+180) < rollTolerance
     # inverted
-    colors(i,:) = greeni;
-  elseif abs(roll(i)-90) < rollTolerance
+    colors(idx,:) = greeni;
+  elseif rollCheck(roll(idx), e_roll(idx), -90, rollTolerance) #abs(roll(idx)-90) < rollTolerance
     # right knife edge
-    colors(i,:) = yellow;
-  elseif abs(roll(i)+90) < rollTolerance
+    colors(idx,:) = yellow;
+  elseif rollCheck(roll(idx), e_roll(idx), 90, rollTolerance) #abs(roll(idx)+90) < rollTolerance
     # left knife edge
-    colors(i,:) = yellow;
+    colors(idx,:) = yellow;
   else
-    colors(i,:) = red;
-    rollErr = [rollErr i];
+    colors(idx,:) = red;
+    rollErr = [rollErr idx];
   endif
 endfor
 sizes = 10 * ones(length(colors),1);
 
 # plot 5 second time intervals
 thacks = [];
-for i = 1:125:length(tsp)
-  thacks = [thacks tsp(i)];
+for idx = 1:125:Nsamp
+  thacks = [thacks tsp(idx)];
 endfor
 
 fignum
@@ -190,19 +228,19 @@ limits=axis();
 xoffset = (limits(2)-limits(1))/(length(thacks)*4);
 yoffset = limits(3) + (limits(4)-limits(3))/40;
 hold on
-for i = 1:length(thacks)
-  plot([thacks(i) thacks(i)],limits(3:4),'-b');
-  text(thacks(i)-xoffset,yoffset,num2str(i-1))
+for idx = 1:length(thacks)
+  plot([thacks(idx) thacks(idx)],limits(3:4),'-b');
+  text(thacks(idx)-xoffset,yoffset,num2str(idx-1))
 endfor
 yGrid = [rollTolerance 45 90 180-rollTolerance 180];
-for i = 1:length(yGrid)
-  plot([limits(1) limits(2)],[-yGrid(i),-yGrid(i)],'-b');
-  plot([limits(1) limits(2)],[ yGrid(i), yGrid(i)],'-b');
+for idx = 1:length(yGrid)
+  plot([limits(1) limits(2)],[-yGrid(idx),-yGrid(idx)],'-b');
+  plot([limits(1) limits(2)],[ yGrid(idx), yGrid(idx)],'-b');
 endfor
 xticks(thacks);
 xlabels={};
-for i=1:length(thacks)
-  xlabels(i) = sprintf("%4.1f",thacks(i));
+for idx=1:length(thacks)
+  xlabels(idx) = sprintf("%4.1f",thacks(idx));
 endfor
 xticklabels(xlabels);
 yticks([-yGrid yGrid]);
@@ -214,8 +252,8 @@ xlabel "time"
 ylabel "degrees)"
 legend("roll","pitch","yaw")
 
-uroll = rad2deg(unwrap(deg2rad(roll)));
-uyaw = (180/pi)*unwrap(yaw*pi/180);
+uroll = unwrapd(roll);
+uyaw  = unwrapd(yaw);
 
 figure(fignum+1, 'position', [900,100,800,800])
 subplot(2,1,1)
@@ -231,14 +269,14 @@ endif
 limits=axis();
 xoffset = (limits(2)-limits(1))/(length(thacks)*4);
 yoffset = limits(3) + (limits(4)-limits(3))/40;
-for i = 1:length(thacks)
-  plot([thacks(i) thacks(i)],limits(3:4),'-b');
-  text(thacks(i)-xoffset,yoffset,num2str(i-1))
+for idx = 1:length(thacks)
+  plot([thacks(idx) thacks(idx)],limits(3:4),'-b');
+  text(thacks(idx)-xoffset,yoffset,num2str(idx-1))
 endfor
 xticks(thacks);
 xlabels={};
-for i=1:length(thacks)
-  xlabels(i) = sprintf("%4.1f",thacks(i));
+for idx=1:length(thacks)
+  xlabels(idx) = sprintf("%4.1f",thacks(idx));
 endfor
 xticklabels(xlabels);
 yoff = 180*round(limits(3) / 180);
@@ -246,8 +284,8 @@ nwraps = round((limits(4)-limits(3)) / 180);
 yTicks = [];
 yGrid = [rollTolerance 45 90 180-rollTolerance 180+rollTolerance 270-rollTolerance 270+rollTolerance ];
 for w = 1:nwraps
-  for i = 1:length(yGrid)
-    plot([limits(1) limits(2)],[ yoff+yGrid(i), yoff+yGrid(i)],'-b');
+  for idx = 1:length(yGrid)
+    plot([limits(1) limits(2)],[ yoff+yGrid(idx), yoff+yGrid(idx)],'-b');
   endfor
   yTicks = [yTicks yoff+[0 45 90]];
   yoff += 180;
@@ -263,19 +301,19 @@ ylabel "degrees)"
 legend("roll","pitch","yaw")
 
 subplot(2,1,2)
-plot(tsp,rad2deg(gx),'.-r',tsp,rad2deg(gy),'.-k',tsp,rad2deg(gz),'.-m')
+plot(tsp,rad2deg(gv),'.-')
 limits=axis();
 xoffset = (limits(2)-limits(1))/(length(thacks)*4);
 yoffset = limits(3) + (limits(4)-limits(3))/40;
 hold on
-for i = 1:length(thacks)
-  plot([thacks(i) thacks(i)],limits(3:4),'-b');
-  text(thacks(i)-xoffset,yoffset,num2str(i-1))
+for idx = 1:length(thacks)
+  plot([thacks(idx) thacks(idx)],limits(3:4),'-b');
+  text(thacks(idx)-xoffset,yoffset,num2str(idx-1))
 endfor
 xticks(thacks);
 xlabels={};
-for i=1:length(thacks)
-  xlabels(i) = sprintf("%4.1f",thacks(i));
+for idx=1:length(thacks)
+  xlabels(idx) = sprintf("%4.1f",thacks(idx));
 endfor
 xticklabels(xlabels);
 axis([tsp(1),tsp(end),limits(3),limits(4)])
@@ -299,9 +337,9 @@ function timeHacks(limits, xyzr, c1, c2, color)
   hold on
   offset = (limits(4)-limits(3))/20;
   hackIndex = 0;
-  for i = 1:125:length(xyzr)
-    scatter(xyzr(i,c1),xyzr(i,c2),[10],color)
-    text(xyzr(i,c1)+offset,xyzr(i,c2)+offset,num2str(hackIndex))
+  for idx = 1:125:length(xyzr)
+    scatter(xyzr(idx,c1),xyzr(idx,c2),[10],color)
+    text(xyzr(idx,c1)+offset,xyzr(idx,c2)+offset,num2str(hackIndex))
     hackIndex += 1;
   endfor
   hold off  
@@ -314,4 +352,12 @@ function scatterPlot(xyzr, c1, c2, sizes, colors, color, xlim)
   limits = axis();
   timeHacks(limits, xyzr, c1, c2, color);
   grid on
+endfunction
+
+function good = rollCheck(mroll, eroll, center, tol)
+  good = (abs(mroll-center) < tol) || (abs(eroll-center) < tol);
+endfunction
+
+function u = unwrapd(angled)
+  u = rad2deg(unwrap(deg2rad(angled)));  
 endfunction
