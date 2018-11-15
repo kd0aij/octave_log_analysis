@@ -1,6 +1,6 @@
-function plot_tseg_color2(startTime, endTime, data, ...
+function plot_tseg_color2(startTime, endTime, data,
   fignum=1, label='untitled', origin=[39.8420194 -105.2123333 1808], 
-  rollTolerance=15, posIndex=2, pilotNorth=16, pThresh=65, plotTitle='')
+  rollTolerance=15, posIndex=2, pilotNorth=16, pThresh=70, plotTitle='')
   
 # data contains fields: 
 #         1    2    3    4     5      6    7
@@ -68,15 +68,15 @@ e_pitch = data(startIndex:endIndex,6);
 
 # compute roll/pitch in maneuver plane
 mplanes = [];
-persistent chdg = pilotNorth + 90;
+chdg = pilotNorth + 90;
 disp(sprintf("Runway heading (CW from North) is %5.1f (East) / %5.1f (West)", 
              chdg, 180+chdg));
-persistent onVertical = 0;
+onVertical = 0;
 avghdg = chdg;
 ghdg = chdg;
 then = time;
 for idx = 1:Nsamp
-  [roll(idx) pitch(idx) wca] = maneuver_roll_pitch(avghdg, quat(idx,:));
+  [roll(idx) pitch(idx) wca] = maneuver_roll_pitch(avghdg, quat(idx,:), pThresh);
   if onVertical
     # hysteresis
     if abs(pitch(idx)) < (pThresh - 2)
@@ -159,7 +159,7 @@ for idx = 1:length(mplanes)
 endfor
 
 figure(8)
-plot(tsp, unwrapd(e_roll), 'o', tsp, unwrapd(roll), tsp, e_pitch, 'o', tsp, pitch)
+plot(tsp, (e_roll), 'o', tsp, (roll), tsp, e_pitch, 'o', tsp, pitch)
 title('Euler RP vs. maneuver RP')
 legend(['eroll'; 'roll'; 'epitch'; 'pitch'])
 
@@ -355,7 +355,8 @@ function scatterPlot(xyzr, c1, c2, sizes, colors, color, xlim)
 endfunction
 
 function good = rollCheck(mroll, eroll, center, tol)
-  good = (abs(mroll-center) < tol) || (abs(eroll-center) < tol);
+##  good = (abs(mroll-center) < tol) || (abs(eroll-center) < tol);
+  good = (abs(mroll-center) < tol);
 endfunction
 
 function u = unwrapd(angled)

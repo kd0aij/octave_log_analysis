@@ -23,6 +23,7 @@ function res = alignData(POS, GPS, ATT, IMU, NKF1, NKQ1)
 # 24:26)(corrected Euler)Roll, Pitch, Yaw
 
 pkg load quaternion
+pkg load geometry
 
 ats = ATT.data(:,1);
 gts = GPS.data(:,1);

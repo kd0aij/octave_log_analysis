@@ -61,7 +61,7 @@ function [state data] = pattern_maneuver(maneuver, radius, angle, T, dt, state,
       gx = 0;
       gz = 0;
       
-      dquat = rot2q([0 1 0], -dtheta);
+      dquat = rot2q([0 1 0], dtheta);
       dbx = [1 0 0] * state.spd;
         
       for idx = 1:Nsamp
@@ -82,7 +82,7 @@ function [state data] = pattern_maneuver(maneuver, radius, angle, T, dt, state,
         # required for wind_correctionE
         [quatc s_factor] = wind_correctionE(state, wind);
         
-##        [roll pitch yaw] = quat2euler(state.quat);
+        [roll pitch yaw] = quat2euler(state.quat);
 ##        disp(sprintf("in maneuver: %7s RPY: %5.1f, %5.1f, %5.1f", 
 ##                                maneuver, roll, pitch, yaw));
       endfor
@@ -174,12 +174,13 @@ endfunction
 
 function data = writeRes(data, idx, noise, pThresh, origin, rhdg,
                   state, gx, gy, gz, quatc)
+                  # pThresh is not used
                   
   persistent avgYaw;
   
-  # position in meters
+  # position in meters (used for plotting in test_maneuvers)
   pnoise = 2 * noise * (rand(1,3) - 0.5);
-  data(idx,27:29) = state.pos + pnoise;
+  data(idx,27:29) = ned2enu(state.pos + pnoise);
                 
   # gyros (deg/sec)
   data(idx,8:10) = [gx gy gz];
@@ -195,15 +196,16 @@ function data = writeRes(data, idx, noise, pThresh, origin, rhdg,
   data(idx,5:7) = [n_roll wrappedPitch(n_pitch) n_yaw];
   
   # VN, VE, VD
-  # TODO: this must be ENU, since x,y is east,north
-  vel3d = hamilton_product(state.quat, [1 0 0]) * state.spd;
-  data(idx,14) = vel3d(2);
-  data(idx,15) = vel3d(1);
-  data(idx,16) = -vel3d(3);
+  data(idx,14:16) = hamilton_product(state.quat, [1 0 0]) * state.spd;
 
   # synthetic quaternion Q1-4
+  # transform from ENU to NED in the earth frame
+  # rotate x into y, y to -x, then rotate z to -z
+##  enu2ned = unit(rot2q([1 0 0], pi) * rot2q([0 0 1], pi/2));
+##  enu2ned = unit(rot2q([1 0 0], pi));
+##  quat = quat * enu2ned;  
   data(idx,17:20) = [quat.w quat.i quat.j quat.k];
-
+  
 ##  # corrected Euler RPY
 ##  # handle Euler roll/yaw indeterminacy on vertical lines
 ##  # convert quaternion to Euler angles; pitch threshold for vertical is pThresh 
@@ -230,10 +232,14 @@ function data = writeRes(data, idx, noise, pThresh, origin, rhdg,
 ##  lat = origin(1) + m2dLat(yp);
 ##  lng = origin(2) + m2dLng(xp, origin(1));
   
-  lla = xyz2lla(state.pos, 0, origin);
+  # convert lat/lon/alt to ENU meters with no rotation
+  lla = xyz2lla(ned2enu(state.pos), 0, origin);
   
   # POS, GPS
-  data(idx,2:4) = [lla(1) lla(2) state.pos(3)];
-  data(idx,21:23) = [lla(1) lla(2) state.pos(3)];
+  data(idx,2:4) = [lla(1) lla(2) lla(3)];
+  data(idx,21:23) = [lla(1) lla(2) lla(3)];
 endfunction
 
+function enu = ned2enu(ned)
+  enu = [ned(2) ned(1), -ned(3)];
+endfunction

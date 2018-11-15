@@ -24,23 +24,25 @@ function test_maneuvers()
 # 24:26)(corrected Euler)Roll, Pitch, Yaw
 # 27:29) x, y, z
 
+pkg load quaternion
+pkg load geometry
+
 origin = [39.8420194 -105.2123333 1808];
 
 rollTolerance = 10;
-pThresh = 75;
+pThresh = 0;
 noise = 0; # degrees, meters
 
-# runway heading: this is the angle from the x axis, positive CCW
-# for rhdg=30, the runway number would be 6: compass heading of 60 degrees
-rhdg  = 30; 
-
 # pilotNorth is the direction the pilot is facing:
-# for rhdg=30, this is 30 degrees west of North: compass heading 330, yaw=-30
-pilotNorth = -30; 
+# for rhdg=16, this is 16 degrees east of North: compass heading 16, yaw=??
+pilotNorth = 16; 
+
+# runway heading: this is the angle from the x axis, positive CW
+# for rhdg=-30, the runway number would be 6: compass heading of 60 degrees
+# for rhdg=16, the runway number would be 10.6: compass heading of 106 degrees
+rhdg  = 90 + pilotNorth; 
 
 wind = [0 5 0]; # m/sec in earth frame
-
-pkg load quaternion
 
 clear res;
 close all;
@@ -55,13 +57,14 @@ wind = (rE2runway' * wind')'
 
 # straight line entry
 # center of box (150m in front of pilot), 30m AGL
-state.pos = [0 150 origin(3)+30];
-
-# init to straight & level
-roll  = 0;
-pitch = 0;
+# NED coordinates
+state.pos = [150 0 -(origin(3)+30)];
 
 # state comprises Euler RPY, ECEF position and speed
+# init attitude to straight & level, assuming NED, yaw 0 is North
+# and yaw CW from North to runway heading is rhdg
+roll  = 0;
+pitch = 0;
 state.quat = euler2quat(roll, pitch, rhdg);
 
 # end entry at center of box (150m in front of pilot)
@@ -76,6 +79,8 @@ state.pos = (rE2runway' * state.pos')';
 ##pattern_maneuver('wind_comp_on', radius, angle, T, dt,
 ##                 state, noise, pThresh, origin, rhdg, wind);
 
+then = time;
+if 1
 # full roll
 maneuver = 'roll';
 angle = 360;
@@ -99,8 +104,9 @@ angle = 90;
 [state data] = pattern_maneuver(maneuver, radius, angle, T, dt,
                               state, noise, pThresh, origin, rhdg, wind);
 res = [res; data];
-
+endif
 # roll to right knife edge on vertical line
+# without this, it shows a roll to left instead of right
 T = 1;
 maneuver = 'roll';
 angle = 90;
@@ -157,11 +163,13 @@ Nsamp = length(res);
 pts = [0:dt:(Nsamp-1)*dt];
 res(1:Nsamp,1) = pts;
 
+disp(sprintf("maneuver generation time: %f", time-then));
+
 # plot maneuver
 yawCor = rad2deg(atan2(vectorNorm(wind), state.spd));
 plot_title = sprintf("roll tolerance %d degrees, crosswind : %5.1f deg",
                      rollTolerance, yawCor);
 plot_tseg_color2(0, (Nsamp-1)*dt, res, 1, 'some_maneuvers',
-                 origin, rollTolerance, 2, pilotNorth, pThresh, plot_title);
+                 origin, rollTolerance, 2, pilotNorth=pilotNorth, pThresh, plot_title);
 
 endfunction

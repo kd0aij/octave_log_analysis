@@ -1,4 +1,4 @@
-function [roll pitch wca wca_axis] = maneuver_roll_pitch(rhdg, quat)
+function [roll pitch wca wca_axis] = maneuver_roll_pitch(rhdg, quat, pThresh)
   # input q is an array [w x y z] or quaternion object: q.w q.i q.j q.k
   if not(isa(quat,'quaternion') )
     q = quat;
@@ -12,6 +12,7 @@ function [roll pitch wca wca_axis] = maneuver_roll_pitch(rhdg, quat)
   hzplane = [-sind(rhdg) cosd(rhdg) 0];
   
   bx = hamilton_product(quat, [1 0 0]);
+  bz = hamilton_product(quat, [0 0 1]);
 
   # a more general version would allow the maneuver plane to be non-vertical
   # where mplane is (hv cross earthz) rotated about hv by a roll angle
@@ -24,34 +25,52 @@ function [roll pitch wca wca_axis] = maneuver_roll_pitch(rhdg, quat)
   wca_axis = cross(bx, hzplane);
   wca = 90 - asind(vectorNorm(wca_axis));
   
-  # to back out wca, rotate about axis cross(bx, hzplane) 
+  # to back out wca, rotate about cross(bx, hzplane) 
   wca_axis = wca_axis / vectorNorm(wca_axis);
   # this will be inv(quatc) if correct
   r2hzp = rot2q(wca_axis, deg2rad(real(wca)));
-  # this is the attitude with body x aligned to maneuver heading
+  # this is the attitude with body x rotated into maneuver plane
   fq = unit(r2hzp * quat);
 ##  bxchz = cross(hamilton_product(fq, [1 0 0]), hzplane);
   
-  # calculate Euler pitch
+  # calculate Euler pitch in maneuver plane
   pitch = real(rad2deg( asin(2*(fq.w*fq.y - fq.z*fq.x))));
-
+  rolle  = rad2deg(atan2(2*(fq.w*fq.x + fq.y*fq.z), 1 - 2*(fq.x*fq.x + fq.y*fq.y)));
+  [roll pitch yaw] = quat2euler(fq);
+  if abs(pitch) < pThresh
+    return 
+  endif
+  
+  # back out rhdg and pitch
+  ryaw = rot2q([0 0 1], deg2rad(-rhdg));
+  rpitch = rot2q([0 1 0], deg2rad(-pitch));
+  rollq = unit(rpitch * ryaw * fq);
+  [axisr, thetar] = q2rot(rollq);
+  direction = dot(axisr, [1 0 0]);
+  roll = sign(direction) * wrap(rad2deg(thetar));
+  
   # roll is zero when plane of wings is perpendicular to maneuver plane
   
-  # perpendicular to body x-z plane transformed to earth frame
-  xzplane = hamilton_product(fq, [0 1 0]);
-  
-  # sine of angle between xzplane and maneuver plane (always positive: theta=[0,180]
-  xy_cross_hz = cross(hzplane, xzplane);
-  stheta = vectorNorm(xy_cross_hz);
-  
-  # cosine of angle between wing plane and maneuver plane
-  ctheta = dot(xzplane, hzplane);
-  
-  if dot(xzplane, hv) > 0
-    # this gives a range of [0, 180] 
-    roll = atan2d(stheta, ctheta);
-  else
-    roll = -atan2d(stheta, ctheta);
-  endif
+##  # perpendicular to body x-z plane transformed to earth frame
+##  xzplane = hamilton_product(fq, [0 1 0]);
+##  
+##  # sine of angle between xzplane and maneuver plane (always positive: theta=[0,180]
+##  xy_cross_hz = cross(hzplane, xzplane);
+##  stheta = vectorNorm(xy_cross_hz);
+##  
+##  # cosine of angle between wing plane and maneuver plane
+##  ctheta = dot(xzplane, hzplane);
+##  
+##  roll = atan2d(stheta, ctheta);
+##### this isn't the right criterion; when rolling the body z vector may point
+##### up or down 
+####  if bz(3) >= 0
+####    # non-inverted
+####    # atan2 has a range of [0, 180] 
+####    roll = -atan2d(stheta, ctheta);
+####  else
+####    # inverted
+####    roll = atan2d(stheta, ctheta);
+####  endif
 endfunction
 
