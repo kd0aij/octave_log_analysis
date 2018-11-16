@@ -82,7 +82,7 @@ function [state data] = pattern_maneuver(maneuver, radius, arc, T, dt, state,
         # required for wind_correctionE
         [quatc s_factor] = wind_correctionE(state, wind);
         
-        [roll pitch yaw] = quat2euler(state.quat);
+##        [roll pitch yaw] = quat2euler(state.quat);
 ##        disp(sprintf("in maneuver: %7s RPY: %5.1f, %5.1f, %5.1f", 
 ##                                maneuver, roll, pitch, yaw));
       endfor
@@ -136,8 +136,7 @@ function [state data] = pattern_maneuver(maneuver, radius, arc, T, dt, state,
       endfor
         
     otherwise
-      disp("maneuver is one of:")
-      disp("arc, line, roll");
+      disp(["unsupported maneuver: " maneuver]);
       return
     
   endswitch

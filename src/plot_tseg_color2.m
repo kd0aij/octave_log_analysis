@@ -1,6 +1,6 @@
 function plot_tseg_color2(startTime, endTime, data,
   fignum=1, label='untitled', origin=[39.8420194 -105.2123333 1808], 
-  rTol=15, posIndex=2, pilotNorth=16, pThresh=60, plotTitle='')
+  rTol=15, posIndex=2, pilotNorth=16, pThresh=88, plotTitle='')
   
 # data contains fields: 
 #         1    2    3    4     5      6    7
@@ -382,8 +382,8 @@ function scatterPlot(xyzr, c1, c2, sizes, colors, color, xlim)
 endfunction
 
 function good = rollCheck(mroll, eroll, center, tol)
-##  good = (abs(mroll-center) < tol) || (abs(eroll-center) < tol);
-  good = (abs(mroll-center) < tol);
+  good = (abs(mroll-center) < tol) || (abs(eroll-center) < tol);
+##  good = (abs(mroll-center) < tol);
 endfunction
 
 function u = unwrapd(angled)
