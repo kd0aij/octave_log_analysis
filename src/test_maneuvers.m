@@ -30,19 +30,19 @@ pkg load geometry
 origin = [39.8420194 -105.2123333 1808];
 
 rollTolerance = 10;
-pThresh = 60;
+pThresh = 88;
 noise = 0; # degrees, meters
 
 # pilotNorth is the direction the pilot is facing:
 # for rhdg=16, this is 16 degrees east of North: compass heading 16, yaw=??
-pilotNorth = 16; 
+pilotNorth = 0; 
 
-# runway heading: this is the angle from the x axis, positive CW
-# for rhdg=-30, the runway number would be 6: compass heading of 60 degrees
-# for rhdg=16, the runway number would be 10.6: compass heading of 106 degrees
+# runway heading: this is the angle from the North axis, positive CW
+# for pilotNorth=-30, the runway number would be 6: compass heading of 60 degrees
+# for pilotNorth=16, the runway number would be 11: compass heading of 106 degrees
 rhdg  = 90 + pilotNorth; 
 
-wind = [10 0 0]; # m/sec in NED earth frame
+wind = [5 0 0]; # m/sec in NED earth frame
 
 clear res;
 close all;
@@ -106,7 +106,6 @@ arc = 90;
 res = [res; data];
 endif
 # roll to right knife edge on vertical line
-# without this, it shows a roll to left instead of right
 T = 1;
 maneuver = 'roll';
 arc = 90;
@@ -121,7 +120,7 @@ T = 2;
                            state, noise, pThresh, origin, rhdg, wind);
 res = [res; data];
 
-# roll inverted on vertical line
+# roll upright on vertical line
 maneuver = 'roll';
 T = 1;
 arc = -90;
@@ -129,10 +128,10 @@ arc = -90;
                            state, noise, pThresh, origin, rhdg, wind);
 res = [res; data];
 
-# push through 1/4 loop to straight & level
+# pull through 1/4 loop to inverted
 maneuver = 'arc';
 radius = 50;
-arc = -90;
+arc = 90;
 [state data] = pattern_maneuver(maneuver, radius, arc, T, dt,
                               state, noise, pThresh, origin, rhdg, wind);
 res = [res; data];

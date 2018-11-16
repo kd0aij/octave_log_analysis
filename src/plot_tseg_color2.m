@@ -67,6 +67,7 @@ e_roll = data(startIndex:endIndex,5);
 e_pitch = data(startIndex:endIndex,6);
 
 # compute roll/pitch in maneuver plane
+mhdg = zeros(Nsamp, 1);
 mplanes = [];
 chdg = pilotNorth + 90;
 disp(sprintf("Runway heading (CW from North) is %5.1f (East) / %5.1f (West)", 
@@ -77,18 +78,35 @@ ghdg = chdg;
 then = time;
 for idx = 1:Nsamp
   [roll(idx) pitch(idx) wca] = maneuver_roll_pitch(avghdg, quat(idx,:), pThresh);
+  mhdg(idx) = avghdg;
   if onVertical
     # hysteresis
-    if abs(pitch(idx)) < (pThresh - 5)
+    if abs(pitch(idx)) < (pThresh - 0.5)
       onVertical = 0;
+      # on exit from vertical line
+      # record maneuver plane
+      ghdg = atan2d(vENU(idx,1),vENU(idx,2));
+      if abs(wrap180(ghdg-chdg)) > 90
+        avghdg = wrap180(180+chdg);
+      else
+        avghdg = chdg;
+      endif
+      mplane.hdg = avghdg;
+      mplane.pos = xyz(idx,:);
+      mplanes = [mplanes mplane];
+      
+      disp(sprintf("t: %5.1f pitch: %3.1f, course: %4.1f, gspd: %3.1f, vspd: %3.1f, wca: %3.1f",
+              tsp(idx), pitch(idx), avghdg, 
+              vectorNorm(vENU(idx,1:2)), vectorNorm(vENU(idx,3)),
+              wca));
     endif
   else
     # while not on vertical line; update heading
 ##    avghdg += .05 * (chdg - avghdg);
     # specify maneuver heading as current ground course
-    ghdg = atan2d(vENU(idx,1),vENU(idx,2)); 
+    ghdg = atan2d(vENU(idx,1),vENU(idx,2));
     if abs(wrap180(ghdg-chdg)) > 90
-      avghdg = wrap180(180+chdg); 
+      avghdg = wrap180(180+chdg);
     else
       avghdg = chdg;
     endif
@@ -159,9 +177,10 @@ for idx = 1:length(mplanes)
 endfor
 
 figure(51)
-plot(tsp, (e_roll), 'o', tsp, (roll), tsp, e_pitch, 'o', tsp, pitch)
-title('Euler RP vs. maneuver RP')
-legend(['eroll'; 'roll'; 'epitch'; 'pitch'])
+plot(tsp, (e_roll), 'o', tsp, (roll), tsp, e_pitch, 'o', tsp, pitch, 
+     tsp, yaw, tsp, mhdg)
+title('Euler RPY vs. maneuver RPY')
+legend(['eroll'; 'roll'; 'epitch'; 'pitch'; 'eyaw'; 'mhdg'])
 axis tight
 grid minor
 

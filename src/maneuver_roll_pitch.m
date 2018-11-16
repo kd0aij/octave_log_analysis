@@ -23,7 +23,7 @@ function [roll pitch wca wca_axis] = maneuver_roll_pitch(rhdg, quat, pThresh)
   # This should be independent of roll and pitch: roll does not affect the direction
   # of bx and pitch is a rotation about hzplane, which does not change the angle
   wca_axis = cross(bx, hzplane);
-  wca = 90 - asind(vectorNorm(wca_axis));
+  wca = 90 - atan2d(vectorNorm(wca_axis), dot(bx,hzplane));
   
   # to back out wca, rotate about cross(bx, hzplane) 
   wca_axis = wca_axis / vectorNorm(wca_axis);
