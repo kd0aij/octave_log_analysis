@@ -1,6 +1,6 @@
 function plot_tseg_color2(startTime, endTime, data,
   fignum=1, label='untitled', origin=[39.8420194 -105.2123333 1808], 
-  rollTolerance=15, posIndex=2, pilotNorth=16, pThresh=70, plotTitle='')
+  rTol=15, posIndex=2, pilotNorth=16, pThresh=60, plotTitle='')
   
 # data contains fields: 
 #         1    2    3    4     5      6    7
@@ -79,7 +79,7 @@ for idx = 1:Nsamp
   [roll(idx) pitch(idx) wca] = maneuver_roll_pitch(avghdg, quat(idx,:), pThresh);
   if onVertical
     # hysteresis
-    if abs(pitch(idx)) < (pThresh - 2)
+    if abs(pitch(idx)) < (pThresh - 5)
       onVertical = 0;
     endif
   else
@@ -103,7 +103,7 @@ for idx = 1:Nsamp
       mplanes = [mplanes mplane];
       
       disp(sprintf("t: %5.1f pitch: %3.1f, course: %4.1f, gspd: %3.1f, vspd: %3.1f, wca: %3.1f",
-              tsp(idx), pitch(idx), chdg, 
+              tsp(idx), pitch(idx), avghdg, 
               vectorNorm(vENU(idx,1:2)), vectorNorm(vENU(idx,3)),
               wca));
     endif
@@ -130,7 +130,7 @@ for idx = 1:Nsamp
 endfor
 disp(sprintf("maneuver_roll_pitch elapsed time: %f", time-then));
 
-figure(7)
+figure(50)
 plot3Dline(xyz, '-');
 axis equal
 grid on
@@ -158,10 +158,12 @@ for idx = 1:length(mplanes)
 ##  shading interp;
 endfor
 
-figure(8)
+figure(51)
 plot(tsp, (e_roll), 'o', tsp, (roll), tsp, e_pitch, 'o', tsp, pitch)
 title('Euler RP vs. maneuver RP')
 legend(['eroll'; 'roll'; 'epitch'; 'pitch'])
+axis tight
+grid minor
 
 colors = ones(length(roll),3);
 red = hsv2rgb([0,1,1]);
@@ -173,19 +175,19 @@ magenta = [1,0,1];
 rollErr = [];
 
 for idx = 1:length(colors)
-  if rollCheck(roll(idx), e_roll(idx), 0, rollTolerance) #abs(roll(idx)) < rollTolerance
+  if rollCheck(roll(idx), e_roll(idx), 0, rTol) #abs(roll(idx)) < rTol
     # level
     colors(idx,:) = green;
-  elseif rollCheck(roll(idx), e_roll(idx), -180, rollTolerance) #abs(roll(idx)-180) < rollTolerance
+  elseif rollCheck(roll(idx), e_roll(idx), -180, rTol) #abs(roll(idx)-180) < rTol
     # inverted
     colors(idx,:) = greeni;
-  elseif rollCheck(roll(idx), e_roll(idx), 180, rollTolerance) #abs(roll(idx)+180) < rollTolerance
+  elseif rollCheck(roll(idx), e_roll(idx), 180, rTol) #abs(roll(idx)+180) < rTol
     # inverted
     colors(idx,:) = greeni;
-  elseif rollCheck(roll(idx), e_roll(idx), -90, rollTolerance) #abs(roll(idx)-90) < rollTolerance
+  elseif rollCheck(roll(idx), e_roll(idx), -90, rTol) #abs(roll(idx)-90) < rTol
     # right knife edge
     colors(idx,:) = yellow;
-  elseif rollCheck(roll(idx), e_roll(idx), 90, rollTolerance) #abs(roll(idx)+90) < rollTolerance
+  elseif rollCheck(roll(idx), e_roll(idx), 90, rTol) #abs(roll(idx)+90) < rTol
     # left knife edge
     colors(idx,:) = yellow;
   else
@@ -232,7 +234,7 @@ for idx = 1:length(thacks)
   plot([thacks(idx) thacks(idx)],limits(3:4),'-b');
   text(thacks(idx)-xoffset,yoffset,num2str(idx-1))
 endfor
-yGrid = [rollTolerance 45 90 180-rollTolerance 180];
+yGrid = [rTol 45 90 180-rTol 180];
 for idx = 1:length(yGrid)
   plot([limits(1) limits(2)],[-yGrid(idx),-yGrid(idx)],'-b');
   plot([limits(1) limits(2)],[ yGrid(idx), yGrid(idx)],'-b');
@@ -262,7 +264,7 @@ plot(tsp, uroll, '.-r', tsp, pitch, '.-k', tsp, uyaw, '.-m');
 hold on
 xxx = find(abs(pitch)>pThresh);
 plot(tsp(xxx), pitch(xxx), 'ok');
-# highlight roll error > rollTolerance
+# highlight roll error > rTol
 if length(rollErr) > 0
   plot(tsp(rollErr), uroll(rollErr), 'or');
 endif
@@ -279,20 +281,26 @@ for idx=1:length(thacks)
   xlabels(idx) = sprintf("%4.1f",thacks(idx));
 endfor
 xticklabels(xlabels);
-yoff = 180*round(limits(3) / 180);
-nwraps = round((limits(4)-limits(3)) / 180);
+yoff = 360*round(limits(3) / 360);
+nwraps = round((limits(4)-limits(3)) / 360) - round(yoff/360);
 yTicks = [];
-yGrid = [rollTolerance 45 90 180-rollTolerance 180+rollTolerance 270-rollTolerance 270+rollTolerance ];
+yGrid = [-rTol rTol 45 90-rTol 90+rTol 135 
+         180-rTol 180+rTol 225 270-rTol 270+rTol 315];
+yGridLabels = {'up', 'up', 'r45', 'rKE', 'rKE', 'ir45', 
+               'inv', 'inv', 'il45', 'lKE', 'lKE', 'l45'};
+yTickLabels = [];
 for w = 1:nwraps
-  for idx = 1:length(yGrid)
-    plot([limits(1) limits(2)],[ yoff+yGrid(idx), yoff+yGrid(idx)],'-b');
-  endfor
-  yTicks = [yTicks yoff+[0 45 90]];
-  yoff += 180;
+##  for idx = 1:length(yGrid)
+##    plot([limits(1) limits(2)],[ yoff+yGrid(idx), yoff+yGrid(idx)],'-b');
+##  endfor
+  yTicks = [yTicks yoff+yGrid];
+  yTickLabels = [yTickLabels yGridLabels];
+  yoff += 360;
 endfor
 yticks(yTicks);
+yticklabels(yTickLabels);
 axis([tsp(1),tsp(end),limits(3),limits(4)])
-grid off
+grid on
 
 title (sprintf("unwrapped roll, pitch, unwrapped yaw"))
 ##title (sprintf("roll, pitch, yaw"))

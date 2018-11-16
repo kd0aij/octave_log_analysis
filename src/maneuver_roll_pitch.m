@@ -28,7 +28,7 @@ function [roll pitch wca wca_axis] = maneuver_roll_pitch(rhdg, quat, pThresh)
   # to back out wca, rotate about cross(bx, hzplane) 
   wca_axis = wca_axis / vectorNorm(wca_axis);
   # this will be inv(quatc) if correct
-  r2hzp = rot2q(wca_axis, deg2rad(real(wca)));
+  r2hzp = rot2q(wca_axis, deg2rad(real(-wca)));
   # this is the attitude with body x rotated into maneuver plane
   fq = unit(r2hzp * quat);
   
@@ -36,9 +36,9 @@ function [roll pitch wca wca_axis] = maneuver_roll_pitch(rhdg, quat, pThresh)
   pitch = real(rad2deg( asin(2*(fq.w*fq.y - fq.z*fq.x))));
   rolle  = rad2deg(atan2(2*(fq.w*fq.x + fq.y*fq.z), 1 - 2*(fq.x*fq.x + fq.y*fq.y)));
   [roll pitch yaw] = quat2euler(fq);
-  if abs(pitch) < pThresh
-    return 
-  endif
+##  if abs(pitch) < pThresh
+##    return 
+##  endif
   
   # back out rhdg and pitch
   ryaw = rot2q([0 0 1], deg2rad(-rhdg));

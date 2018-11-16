@@ -1,4 +1,4 @@
-function [state data] = pattern_maneuver(maneuver, radius, angle, T, dt, state, 
+function [state data] = pattern_maneuver(maneuver, radius, arc, T, dt, state, 
                                          noise, pThresh, origin, rhdg, wind)
   # state comprises attitude quaternion, ECEF position and speed in a structure
   # rhdg is desired ground heading
@@ -7,9 +7,9 @@ function [state data] = pattern_maneuver(maneuver, radius, angle, T, dt, state,
   
 ##  [roll pitch yaw] = quat2euler(state.quat);
 ##  disp(sprintf("maneuver: %10s RPY: %5.1f, %5.1f, %5.1f, T: %5.1f, r: %5.1f, a: %5.1f", 
-##                          maneuver, roll, pitch, yaw, T, radius, angle));
+##                          maneuver, roll, pitch, yaw, T, radius, arc));
   disp(sprintf("maneuver: %10s T: %5.1f, r: %5.1f, a: %5.1f wind_comp: %i", 
-                          maneuver, T, radius, angle, not(dont_wind_comp)));
+                          maneuver, T, radius, arc, not(dont_wind_comp)));
   switch (maneuver)
     case 'wind_comp_on'
       dont_wind_comp = 0;
@@ -38,10 +38,10 @@ function [state data] = pattern_maneuver(maneuver, radius, angle, T, dt, state,
     # similarly allow finding the tilt. Next step is projecting the series onto
     # the plane determined by heading and tilt. In this plane, 
     
-    # inside loop has a positive angle, outside loop has a negative angle
+    # inside loop has a positive arc, outside loop has a negative arc
     case 'arc'
      
-      arclen = radius * deg2rad(abs(angle));
+      arclen = radius * deg2rad(abs(arc));
       [quatc s_factor] = wind_correctionE(state, wind);
       T = round(arclen / (s_factor*state.spd) / dt) * dt;
 
@@ -55,8 +55,8 @@ function [state data] = pattern_maneuver(maneuver, radius, angle, T, dt, state,
       
       # speed spd in m/sec
       # gy in rad/sec (pitch rate)
-      gy = deg2rad(angle) / T;
-      dtheta = deg2rad(angle) / Nsamp;
+      gy = deg2rad(arc) / T;
+      dtheta = deg2rad(arc) / Nsamp;
 
       gx = 0;
       gz = 0;
@@ -107,13 +107,13 @@ function [state data] = pattern_maneuver(maneuver, radius, angle, T, dt, state,
         state.pos += dp;
       endfor
         
-    # straight line roll through degrees specified by angle
+    # straight line roll through degrees specified by arc
     case 'roll'
       Nsamp = T / dt;
       data = zeros(Nsamp, 29);
 
       quatc = wind_correctionE(state, wind);
-      dtheta = deg2rad(angle) / Nsamp;
+      dtheta = deg2rad(arc) / Nsamp;
       dquat = rot2q([1 0 0], dtheta);
 
       gx = rad2deg(dtheta) / dt;
@@ -136,8 +136,7 @@ function [state data] = pattern_maneuver(maneuver, radius, angle, T, dt, state,
       endfor
         
     otherwise
-      disp("usage: testEulerAngles(maneuver)");
-      disp("where maneuver is one of:")
+      disp("maneuver is one of:")
       disp("arc, line, roll");
       return
     
