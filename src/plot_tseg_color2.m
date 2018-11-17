@@ -71,7 +71,7 @@ mhdg = zeros(Nsamp, 1);
 mplanes = [];
 chdg = pilotNorth + 90;
 disp(sprintf("Runway heading (CW from North) is %5.1f (East) / %5.1f (West)", 
-             chdg, 180+chdg));
+             chdg, wrap180(180+chdg)));
 onVertical = 0;
 avghdg = chdg;
 ghdg = chdg;
@@ -278,54 +278,68 @@ uyaw  = unwrapd(yaw);
 
 figure(fignum+1, 'position', [900,100,800,800])
 subplot(2,1,1)
-plot(tsp, uroll, '.-r', tsp, pitch, '.-k', tsp, uyaw, '.-m');
+##ax = plotyy(tsp, uroll, tsp, [pitch yaw]);
+ax = plotyy(tsp, roll, tsp, [pitch mhdg]);
+rline = findobj(ax(1),'linestyle','-')
+set(rline,"linestyle",'none')
+set(rline,"marker",'.');
+set(rline,"markersize",10)
+hl = legend(ax(1), "roll", "pitch", "hdg")
+legend(hl, "location", "northeastoutside");
+
 # highlight abs(pitch) > pThresh
 hold on
 xxx = find(abs(pitch)>pThresh);
-plot(tsp(xxx), pitch(xxx), 'ok');
+plot(ax(2), tsp(xxx), pitch(xxx), '.r');
 # highlight roll error > rTol
 if length(rollErr) > 0
-  plot(tsp(rollErr), uroll(rollErr), 'or');
+##  plot(tsp(rollErr), uroll(rollErr), 'or');
+  plot(ax(1), tsp(rollErr), roll(rollErr), '.r');
 endif
-limits=axis();
+##limits=axis();
+# plot x axis time hacks
 xoffset = (limits(2)-limits(1))/(length(thacks)*4);
 yoffset = limits(3) + (limits(4)-limits(3))/40;
-for idx = 1:length(thacks)
-  plot([thacks(idx) thacks(idx)],limits(3:4),'-b');
-  text(thacks(idx)-xoffset,yoffset,num2str(idx-1))
-endfor
-xticks(thacks);
+xticks(ax(1), thacks);
+xticks(ax(2), []);
 xlabels={};
-for idx=1:length(thacks)
-  xlabels(idx) = sprintf("%4.1f",thacks(idx));
+for idx=2:length(thacks)
+  xlabels(idx) = sprintf("T%i:%4.1f", idx-1, thacks(idx));
 endfor
 xticklabels(xlabels);
-yoff = 360*round(limits(3) / 360);
-nwraps = round((limits(4)-limits(3)) / 360) - round(yoff/360);
+##yoff = 360*round(limits(3) / 360);
+##nwraps = round((limits(4)-limits(3)) / 360) - round(yoff/360);
+yoff = 0;
+nwraps = 1;
 yTicks = [];
-yGrid = [-rTol rTol 45 90-rTol 90+rTol 135 
-         180-rTol 180+rTol 225 270-rTol 270+rTol 315];
-yGridLabels = {'up', 'up', 'r45', 'rKE', 'rKE', 'ir45', 
-               'inv', 'inv', 'il45', 'lKE', 'lKE', 'l45'};
+yGrid = [-180 -180+rTol -135 -90-rTol -90+rTol -45 -rTol ...
+         rTol 45 90-rTol 90+rTol 135 180-rTol 180];
+yGridLabels = {'', 'inv', 'il45', 'lKE', 'lKE', 'l45', ...
+               'up', 'up', 'r45', 'rKE', 'rKE', 'ir45', 'inv', ''};
 yTickLabels = [];
 for w = 1:nwraps
-##  for idx = 1:length(yGrid)
-##    plot([limits(1) limits(2)],[ yoff+yGrid(idx), yoff+yGrid(idx)],'-b');
-##  endfor
   yTicks = [yTicks yoff+yGrid];
   yTickLabels = [yTickLabels yGridLabels];
   yoff += 360;
 endfor
-yticks(yTicks);
-yticklabels(yTickLabels);
-axis([tsp(1),tsp(end),limits(3),limits(4)])
-grid on
+yticks(ax(1), yTicks);
+yticklabels(ax(1), yTickLabels);
 
-title (sprintf("unwrapped roll, pitch, unwrapped yaw"))
-##title (sprintf("roll, pitch, yaw"))
+yTicks = [-180 -135 -90 -45 0 45 90 135 180];
+yticks(ax(2), yTicks);
+
+axis(ax(1), [tsp(1) tsp(end) -185 185]);
+axis(ax(2), [tsp(1) tsp(end) -185 185]);
+grid(ax(1), 'on')
+grid(ax(2), 'on')
+set(ax(1),'ygrid','on')
+set(ax(2),'ygrid','on')
+set(ax(2),'xgrid','off')
+
+title (sprintf("roll, pitch, maneuver hdg"))
 xlabel "time"
-ylabel "degrees)"
-legend("roll","pitch","yaw")
+ylabel(ax(1), "roll attitude")
+ylabel(ax(2), "pitch, hdg degrees")
 
 subplot(2,1,2)
 plot(tsp,rad2deg(gv),'.-')
@@ -333,15 +347,7 @@ limits=axis();
 xoffset = (limits(2)-limits(1))/(length(thacks)*4);
 yoffset = limits(3) + (limits(4)-limits(3))/40;
 hold on
-for idx = 1:length(thacks)
-  plot([thacks(idx) thacks(idx)],limits(3:4),'-b');
-  text(thacks(idx)-xoffset,yoffset,num2str(idx-1))
-endfor
 xticks(thacks);
-xlabels={};
-for idx=1:length(thacks)
-  xlabels(idx) = sprintf("%4.1f",thacks(idx));
-endfor
 xticklabels(xlabels);
 axis([tsp(1),tsp(end),limits(3),limits(4)])
 grid on
