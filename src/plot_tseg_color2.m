@@ -1,5 +1,5 @@
 function plot_tseg_color2(startTime, endTime, data,
-  fignum=1, label='untitled', origin=[39.8420194 -105.2123333 1808], 
+  mnum=0, label='untitled', origin=[39.8420194 -105.2123333 1808], 
   rTol=15, posIndex=2, pilotNorth=16, pThresh=88, plotTitle='')
   
 # data contains fields: 
@@ -148,7 +148,8 @@ for idx = 1:Nsamp
 endfor
 disp(sprintf("maneuver_roll_pitch elapsed time: %f", time-then));
 
-figure(50)
+fignum = mnum * 10;
+figure(fignum++)
 plot3Dline(xyz, '-');
 axis equal
 grid on
@@ -157,6 +158,8 @@ title('unrotated xyz')
 xlabel('East')
 ylabel('True North')
 zlabel('Alt')
+# save figure
+savefig("3D", label, mnum, 800, 800);
 
 # plot maneuver plane: 50x50 meters, vertical, rotated to maneuver heading
 hold on
@@ -176,13 +179,19 @@ for idx = 1:length(mplanes)
 ##  shading interp;
 endfor
 
-figure(51)
+figure(fignum++)
 plot(tsp, (e_roll), 'o', tsp, (roll), tsp, e_pitch, 'o', tsp, pitch, 
      tsp, yaw, tsp, mhdg)
 title('Euler RPY vs. maneuver RPY')
 legend(['eroll'; 'roll'; 'epitch'; 'pitch'; 'eyaw'; 'mhdg'])
 axis tight
 grid minor
+# save figure
+savefig("eulerVmp", label, mnum, 1080, 540);
+fname = sprintf("%s_eulerVmp_%d", label, mnum);
+disp(sprintf("saving 3D track display: %s", fname));
+print ([fname ".jpg"], "-S1080,540")
+hgsave ([fname ".jpg"])
 
 colors = ones(length(roll),3);
 red = hsv2rgb([0,1,1]);
@@ -222,8 +231,11 @@ for idx = 1:125:Nsamp
   thacks = [thacks tsp(idx)];
 endfor
 
+if length(plotTitle) == 0
+  plotTitle = sprintf("roll tolerance: %2.0f", rTol);
+endif
 fignum
-figure(fignum, 'position', [100,100,800,800])
+figure(fignum++, 'position', [100,100,800,800])
 subplot(2,2,1)
 scatterPlot(xyzr, 1, 2, sizes, colors, blue, [-350 350])
 title (sprintf("Plan view\n%s", plotTitle))
@@ -237,7 +249,6 @@ xlabel "east (m)"
 ylabel "alt (m)"
 
 subplot(2,2,3)
-##scatter(xyzr(:,2),xyzr(:,3),sizes,colors,'filled')
 scatterPlot(xyzr, 2, 3, sizes, colors, blue, [0 300])
 title (sprintf("East elevation"))
 xlabel "north (m)"
@@ -246,8 +257,8 @@ ylabel "alt (m)"
 subplot(2,2,4)
 plot(tsp, roll, 'or', tsp, pitch, '.-k', tsp, yaw, 'om');
 limits=axis();
-xoffset = (limits(2)-limits(1))/(length(thacks)*4);
-yoffset = limits(3) + (limits(4)-limits(3))/40;
+xoffset = (limits(2)-limits(1))/(length(thacks)*8);
+yoffset = limits(3) + (limits(4)-limits(3))/80;
 hold on
 for idx = 1:length(thacks)
   plot([thacks(idx) thacks(idx)],limits(3:4),'-b');
@@ -273,30 +284,39 @@ xlabel "time"
 ylabel "degrees)"
 legend("roll","pitch","yaw")
 
-uroll = unwrapd(roll);
-uyaw  = unwrapd(yaw);
+# save figure
+savefig("maneuver", label, mnum, 800, 800);
 
-figure(fignum+1, 'position', [900,100,800,800])
+uroll = unwrapd(roll);
+wuroll = wrap180(uroll, rTol);
+
+figure(fignum++, 'position', [900,100,800,800])
 subplot(2,1,1)
-##ax = plotyy(tsp, uroll, tsp, [pitch yaw]);
-ax = plotyy(tsp, roll, tsp, [pitch mhdg]);
+ax = plotyy(tsp, wuroll, tsp, [pitch mhdg]);
 rline = findobj(ax(1),'linestyle','-')
-set(rline,"linestyle",'none')
+set(rline,"linestyle",'-')
 set(rline,"marker",'.');
 set(rline,"markersize",10)
 hl = legend(ax(1), "roll", "pitch", "hdg")
 legend(hl, "location", "northeastoutside");
-
-# highlight abs(pitch) > pThresh
+axis(ax(1), [tsp(1) tsp(end) -180-rTol 180+rTol]);
+axis(ax(2), [tsp(1) tsp(end) -180-rTol 180+rTol]);
+grid(ax(1), 'on')
+grid(ax(2), 'on')
+set(ax(1),'ygrid','on')
+set(ax(2),'ygrid','on')
+set(ax(2),'xgrid','off')
 hold on
-xxx = find(abs(pitch)>pThresh);
-plot(ax(2), tsp(xxx), pitch(xxx), '.r');
+
+### highlight abs(pitch) > pThresh
+##xxx = find(abs(pitch)>pThresh);
+##plot(ax(2), tsp(xxx), pitch(xxx), '.r');
+
 # highlight roll error > rTol
 if length(rollErr) > 0
-##  plot(tsp(rollErr), uroll(rollErr), 'or');
-  plot(ax(1), tsp(rollErr), roll(rollErr), '.r');
+  plot(ax(1), tsp(rollErr), roll(rollErr), 'ob');
 endif
-##limits=axis();
+
 # plot x axis time hacks
 xoffset = (limits(2)-limits(1))/(length(thacks)*4);
 yoffset = limits(3) + (limits(4)-limits(3))/40;
@@ -307,15 +327,13 @@ for idx=2:length(thacks)
   xlabels(idx) = sprintf("T%i:%4.1f", idx-1, thacks(idx));
 endfor
 xticklabels(xlabels);
-##yoff = 360*round(limits(3) / 360);
-##nwraps = round((limits(4)-limits(3)) / 360) - round(yoff/360);
 yoff = 0;
 nwraps = 1;
 yTicks = [];
-yGrid = [-180 -180+rTol -135 -90-rTol -90+rTol -45 -rTol ...
-         rTol 45 90-rTol 90+rTol 135 180-rTol 180];
-yGridLabels = {'', 'inv', 'il45', 'lKE', 'lKE', 'l45', ...
-               'up', 'up', 'r45', 'rKE', 'rKE', 'ir45', 'inv', ''};
+yGrid = [-180-rTol -180+rTol -135 -90-rTol -90+rTol -45 -rTol ...
+         rTol 45 90-rTol 90+rTol 135 180-rTol 180+rTol];
+yGridLabels = {'inv', 'inv', 'il45', 'lKE', 'lKE', 'l45', ...
+               'up', 'up', 'r45', 'rKE', 'rKE', 'ir45', 'inv', 'inv'};
 yTickLabels = [];
 for w = 1:nwraps
   yTicks = [yTicks yoff+yGrid];
@@ -328,13 +346,6 @@ yticklabels(ax(1), yTickLabels);
 yTicks = [-180 -135 -90 -45 0 45 90 135 180];
 yticks(ax(2), yTicks);
 
-axis(ax(1), [tsp(1) tsp(end) -185 185]);
-axis(ax(2), [tsp(1) tsp(end) -185 185]);
-grid(ax(1), 'on')
-grid(ax(2), 'on')
-set(ax(1),'ygrid','on')
-set(ax(2),'ygrid','on')
-set(ax(2),'xgrid','off')
 
 title (sprintf("roll, pitch, maneuver hdg"))
 xlabel "time"
@@ -357,18 +368,14 @@ xlabel "time"
 ylabel "deg/sec)"
 legend("roll","pitch","yaw")
 
-print (sprintf("%s_RPY_%d.jpg", label, fignum), "-S1080,540")
-hgsave (sprintf("%s_RPY_%d.ofig", label, fignum))
-
-figure(fignum)
-print (sprintf("%s_maneuver_%d.jpg", label, fignum), "-S800,800")
-hgsave (sprintf("%s_maneuver_%d.ofig", label, fignum))
+# save figure
+savefig("RPY", label, mnum, 800, 800);
 
 endfunction
 
 function timeHacks(limits, xyzr, c1, c2, color)
   hold on
-  offset = (limits(4)-limits(3))/20;
+  offset = (limits(4)-limits(3))/40;
   hackIndex = 0;
   for idx = 1:125:length(xyzr)
     scatter(xyzr(idx,c1),xyzr(idx,c2),[10],color)
@@ -388,10 +395,17 @@ function scatterPlot(xyzr, c1, c2, sizes, colors, color, xlim)
 endfunction
 
 function good = rollCheck(mroll, eroll, center, tol)
-  good = (abs(mroll-center) < tol) || (abs(eroll-center) < tol);
-##  good = (abs(mroll-center) < tol);
+##  good = (abs(mroll-center) < tol) || (abs(eroll-center) < tol);
+  good = (abs(mroll-center) < tol);
 endfunction
 
 function u = unwrapd(angled)
   u = rad2deg(unwrap(deg2rad(angled)));  
+endfunction
+
+function savefig(name, label, mnum, width, height)
+  fname = sprintf("%s_%d_%s", label, mnum, name);
+  disp(sprintf("saving figure: %s", fname));
+  print ([fname ".jpg"], sprintf("-S%i,%i", width, height))
+  hgsave ([fname ".ofig"]) 
 endfunction
