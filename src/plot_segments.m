@@ -1,9 +1,9 @@
 # plot all segments in workspace
 
-N = length(segments)
+N = length(segs)
 i = 1;
 while (i < N)
-  plot_track_color(i, segments, data, label)
+  plot_track_color(segs, data, label, i)
 ##  pause(5);
   close all
   i = i + 1
