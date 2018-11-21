@@ -26,6 +26,8 @@ function test_maneuvers()
 
 pkg load quaternion
 pkg load geometry
+clear res;
+close all;
 
 origin = [39.8420194 -105.2123333 1808];
 
@@ -33,27 +35,31 @@ rollTolerance = 10;
 pThresh = 88;
 noise = 0; # degrees, meters
 
-# pilotNorth is the direction the pilot is facing:
-# for rhdg=16, this is 16 degrees east of North: compass heading 16, yaw=??
-pilotNorth = 0; 
+### pilotNorth is the direction the pilot is facing:
+### for rhdg=16, this is 16 degrees east of North: compass heading 16, yaw=??
+##pilotNorth = 25; 
 
 # runway heading: this is the angle from the North axis, positive CW
-# for pilotNorth=-30, the runway number would be 6: compass heading of 60 degrees
-# for pilotNorth=16, the runway number would be 11: compass heading of 106 degrees
-rhdg  = 90 + pilotNorth; 
+# for runway number 6: compass heading of 60 degrees
+# for AAM east field runway compass heading of 106 degrees
+rhdg  = 106; 
 
-wind = [5 0 0]; # m/sec in NED earth frame
-
-clear res;
-close all;
+wind = [0 0 0]; # m/sec in NED earth frame
 
 dt = 1 / 25;
 res = [];
 
 # rotation about earth Z from East to runway heading
-r2runway = rotv([0 0 1], deg2rad(pilotNorth));
+r2runway = rotv([0 0 1], deg2rad(rhdg-90));
 
-##wind = (r2runway' * wind')'
+# parameters
+# arc, circle: arc, radius
+# line: T
+# roll: T, arc
+maneuver_list = {
+  ['roll', 50, 360, 3];
+  ['arc', 50, 90, 3];
+  };
 
 # straight line entry
 # center of box (150m in front of pilot), 50m AGL
@@ -82,11 +88,22 @@ pattern_maneuver('wind_comp_on', 0, 0, 0, 0,
 then = time;
 if 1
 # full roll
-maneuver = 'roll';
+maneuver = 'circle';
 arc = 360;
 [state data] = pattern_maneuver(maneuver, radius, arc, T, dt,
                            state, noise, pThresh, origin, rhdg, wind);
 res = [res; data];
+
+figure(7)
+xyzr = res(:,27:29);
+plot3Dline(xyzr, 'o');
+axis equal
+grid on
+rotate3d on
+title('full')
+xlabel('East')
+ylabel('North')
+zlabel('Alt')
 
 # find heading by fitting a line to xy data
 X = [ones(length(data),1) data(:,27)];
@@ -95,7 +112,7 @@ ehdg = atan2d(beta(2),1);
 figure(8)
 plot(data(:,27),data(:,28),data(:,27),beta(1)+beta(2)*data(:,27),'o')
 axis equal
-title(['heading fit: ' num2str(ehdg)])
+title(sprintf("heading: %5.1f, sigma: %5.1f", ehdg, sigma))
 
 # inside 1/4 loop
 maneuver = 'arc';
@@ -144,17 +161,6 @@ arc = -180;
                               state, noise, pThresh, origin, rhdg, wind);
 res = [res; data];
 
-figure(7)
-xyzr = res(:,27:29);
-plot3Dline(xyzr, 'o');
-axis equal
-grid on
-rotate3d on
-title('full')
-xlabel('East')
-ylabel('North')
-zlabel('Alt')
-
 ##return
 
 # add timestamp column
@@ -168,7 +174,7 @@ disp(sprintf("maneuver generation time: %f", time-then));
 yawCor = rad2deg(atan2(vectorNorm(wind), state.spd));
 plot_title = sprintf("roll tolerance %d degrees, crosswind : %5.1f deg",
                      rollTolerance, yawCor);
-plot_tseg_color2(0, (Nsamp-1)*dt, res, 1, 'some_maneuvers',
-                 origin, rollTolerance, 2, pilotNorth=pilotNorth, pThresh, plot_title);
+plot_tseg_color2(0, (Nsamp-1)*dt, res, 77, 'test_maneuvers',
+                 origin, rollTolerance, 2, rhdg=rhdg, pThresh, plot_title);
 
 endfunction

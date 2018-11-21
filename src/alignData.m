@@ -102,6 +102,7 @@ while (j < length(gts))
   j += 1;
 endwhile
 
+# this is now being handled in plot_tseg_color2
 ### corrected Euler RPY
 ### handle Euler roll/yaw indeterminacy on vertical lines
 ### convert quaternion to Euler angles; pitch threshold for vertical is 60 degrees 

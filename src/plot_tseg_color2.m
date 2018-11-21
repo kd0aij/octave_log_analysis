@@ -1,6 +1,10 @@
 function plot_tseg_color2(startTime, endTime, data,
   mnum=0, label='untitled', origin=[39.8420194 -105.2123333 1808], 
-  rTol=15, posIndex=2, pilotNorth=16, pThresh=88, plotTitle='')
+  rTol=15, posIndex=2, rhdg=106, pThresh=88, plotTitle='')
+  
+# rhdg is runway heading: 0 is North, 90 is East
+# latitude is converted to Y axis in meters
+# longitude is converted to X axis in meters
   
 # data contains fields: 
 #         1    2    3    4     5      6    7
@@ -52,12 +56,14 @@ quat = data(startIndex:endIndex,17:20);
 # convert to meters from origin
 xyz = lla2xyz([lat lon z], 0, origin);
 # and rotate parallel to runway
-xyzr = lla2xyz([lat lon z], pilotNorth, origin);
+xyzr = lla2xyz([lat lon z], rhdg-90, origin);
 
 # assign colors representing roll angle
 # roll range is (-180,180] degrees
 roll  = zeros(Nsamp, 1);
 pitch = zeros(Nsamp, 1);
+wca   = zeros(Nsamp, 1);
+xwnd  = zeros(Nsamp, 1);
 hdg   = data(startIndex:endIndex,7);
 # convert hdg from [0,360] (positive CW) to 
 # [180,-180] (positive CW) (with North at 0)
@@ -69,82 +75,45 @@ e_pitch = data(startIndex:endIndex,6);
 # compute roll/pitch in maneuver plane
 mhdg = zeros(Nsamp, 1);
 mplanes = [];
-chdg = pilotNorth + 90;
+chdg = rhdg;
 disp(sprintf("Runway heading (CW from North) is %5.1f (East) / %5.1f (West)", 
              chdg, wrap180(180+chdg)));
+
+chdg = NaN # use ground track for maneuver heading
+avghdg = atan2d(vENU(1,1),vENU(1,2)); # init avghdg to ground track
+
 onVertical = 0;
-avghdg = chdg;
-ghdg = chdg;
 then = time;
 for idx = 1:Nsamp
-  [roll(idx) pitch(idx) wca] = maneuver_roll_pitch(avghdg, quat(idx,:), pThresh);
+  [roll(idx) pitch(idx) wca(idx)] = maneuver_roll_pitch(avghdg, quat(idx,:), pThresh);
   mhdg(idx) = avghdg;
+  # crosswind is ~ |vENU|*sin(wca): so percentage of earthframe velocity is:
+  xwnd(idx) = 100 * abs(sind(wca(idx)));
   if onVertical
     # hysteresis
     if abs(pitch(idx)) < (pThresh - 0.5)
       onVertical = 0;
       # on exit from vertical line
-      # record maneuver plane
-      ghdg = atan2d(vENU(idx,1),vENU(idx,2));
-      if abs(wrap180(ghdg-chdg)) > 90
-        avghdg = wrap180(180+chdg);
-      else
-        avghdg = chdg;
-      endif
-      mplane.hdg = avghdg;
-      mplane.pos = xyz(idx,:);
-      mplanes = [mplanes mplane];
-      
-      disp(sprintf("t: %5.1f pitch: %3.1f, course: %4.1f, gspd: %3.1f, vspd: %3.1f, wca: %3.1f",
-              tsp(idx), pitch(idx), avghdg, 
-              vectorNorm(vENU(idx,1:2)), vectorNorm(vENU(idx,3)),
-              wca));
+      mplane = getManeuverPlane(chdg, vENU(idx,:), xyz(idx,:));
+      avghdg = mplane.hdg;
+      mplanes = setManeuverPlane(tsp(idx), mplanes, mplane, pitch(idx), vENU(idx,:), wca(idx));
     endif
   else
     # while not on vertical line; update heading
-##    avghdg += .05 * (chdg - avghdg);
-    # specify maneuver heading as current ground course
-    ghdg = atan2d(vENU(idx,1),vENU(idx,2));
-    if abs(wrap180(ghdg-chdg)) > 90
-      avghdg = wrap180(180+chdg);
-    else
-      avghdg = chdg;
-    endif
+    mplane = getManeuverPlane(chdg, vENU(idx,:), xyz(idx,:));
+##    avghdg += .05 * (mplane.hdg - avghdg);
+    avghdg = mplane.hdg;
     
+    # specify maneuver heading as current ground course    
     # vertical line if pitch > threshold
     if abs(pitch(idx)) > pThresh
       onVertical = 1;
       # on entry to vertical line:
+      mplane = getManeuverPlane(chdg, vENU(idx,:), xyz(idx,:));
       # record maneuver plane
-      mplane.hdg = avghdg;
-      mplane.pos = xyz(idx,:);
-      mplanes = [mplanes mplane];
-      
-      disp(sprintf("t: %5.1f pitch: %3.1f, course: %4.1f, gspd: %3.1f, vspd: %3.1f, wca: %3.1f",
-              tsp(idx), pitch(idx), avghdg, 
-              vectorNorm(vENU(idx,1:2)), vectorNorm(vENU(idx,3)),
-              wca));
+      mplanes = setManeuverPlane(tsp(idx), mplanes, mplane, pitch(idx), vENU(idx,:), wca(idx));
     endif
   endif
-
-
-##  if (not(onVertical) && (abs(pitch(idx)) > pThresh))
-##    onVertical = 1;
-##    # record maneuver plane
-##    mplane.hdg = rhdg;
-##    mplane.pos = xyz(idx,:);
-##    mplanes = [mplanes mplane];
-##    
-##    disp(sprintf("t: %5.1f pitch: %3.1f, course: %4.1f, gspd: %3.1f, vspd: %3.1f, wca: %3.1f",
-##            tsp(idx), pitch(idx), rhdg, 
-##            vectorNorm(vENU(idx,1:2)), vectorNorm(vENU(idx,3)),
-##            wca));
-##  elseif abs(pitch(idx)) < pThresh
-##    onVertical = 0;
-##    # specify maneuver heading as current ground course
-##    # this is NED, so y is the first value
-##    rhdg = atan2d(vENU(idx,1),vENU(idx,2));
-##  endif
 endfor
 disp(sprintf("maneuver_roll_pitch elapsed time: %f", time-then));
 
@@ -161,7 +130,7 @@ zlabel('Alt')
 # save figure
 savefig("3D", label, mnum, 800, 800);
 
-# plot maneuver plane: 50x50 meters, vertical, rotated to maneuver heading
+# plot maneuver plane: vertical, rotated to maneuver heading
 hold on
 limits=axis();
 for idx = 1:length(mplanes)
@@ -176,14 +145,15 @@ for idx = 1:length(mplanes)
   zz = [-100 -100; 100 100] + mplanes(idx).pos(3);
   s1 = surf(xx,yy',zz); #, 'Edgecolor', 'none');
   set(s1,'facealpha',0.2);
-##  shading interp;
 endfor
 
-figure(fignum++)
-plot(tsp, (e_roll), 'o', tsp, (roll), tsp, e_pitch, 'o', tsp, pitch, 
-     tsp, yaw, tsp, mhdg)
+figure(fignum++, 'position', [400,50,1080,400])
+hold on
+plot(tsp,  yaw, 'og', tsp, e_pitch, 'ob',tsp, wrap180(unwrapd(e_roll), rTol), 'oc')
+plot(tsp, mhdg, '*-m', tsp, pitch, '*-k', tsp, wrap180(unwrapd(roll), rTol), '*-r')
+plot(tsp, xwnd, '-k')
 title('Euler RPY vs. maneuver RPY')
-legend(['eroll'; 'roll'; 'epitch'; 'pitch'; 'eyaw'; 'mhdg'])
+legend(['eyaw'; 'epitch'; 'eroll'; 'mhdg'; 'pitch'; 'roll'; 'xwnd %'])
 axis tight
 grid minor
 # save figure
@@ -408,4 +378,31 @@ function savefig(name, label, mnum, width, height)
   disp(sprintf("saving figure: %s", fname));
   print ([fname ".jpg"], sprintf("-S%i,%i", width, height))
   hgsave ([fname ".ofig"]) 
+endfunction
+
+function mplane = getManeuverPlane(chdg, vel3d, xyz)
+      # calculate maneuver plane
+      ghdg = atan2d(vel3d(1),vel3d(2));
+      # if chdg is provided, constrain hdg to {chdg, 180+chdg}
+      if not(isnan(chdg))
+        if abs(wrap180(ghdg-chdg)) > 90
+          hdg = wrap180(180+chdg);
+        else # use ground track 
+          hdg = chdg;
+        endif
+      else
+        hdg = ghdg;
+      endif
+      mplane.hdg = hdg;
+      mplane.pos = xyz;
+endfunction
+
+function mplanes = setManeuverPlane(t, mplanes, mplane, pitch, vel3d, wca)
+      # record maneuver plane 
+      mplanes = [mplanes mplane];     
+      disp(sprintf("t: %5.1f pitch: %3.1f, course: %4.1f, gspd: %3.1f, vspd: %3.1f, wca: %3.1f",
+              t, pitch, mplane.hdg, 
+              vectorNorm(vel3d(1:2)), vectorNorm(vel3d(3)),
+              wca));
+
 endfunction

@@ -3,18 +3,24 @@ function [state data] = pattern_maneuver(maneuver, radius, arc, T, dt, state,
   # state comprises attitude quaternion, ECEF position and speed in a structure
   # rhdg is desired ground heading
   # and wind is a velocity vector in earth frame 
-  global dont_wind_comp = 0;
+  
+  # refactoring: various maneuvers require different parameters:
+  # arc needs #degrees of arc and radius but T is dependent on arclength and speed
+  # line needs only T
+  # roll needs T in addition to arc, roll rate is dependent on T and arc
+  # a compact list of maneuvers therefore contains variable length commands
+  global no_wind_comp = 0;
   
 ##  [roll pitch yaw] = quat2euler(state.quat);
 ##  disp(sprintf("maneuver: %10s RPY: %5.1f, %5.1f, %5.1f, T: %5.1f, r: %5.1f, a: %5.1f", 
 ##                          maneuver, roll, pitch, yaw, T, radius, arc));
   disp(sprintf("maneuver: %10s T: %5.1f, r: %5.1f, a: %5.1f wind_comp: %i", 
-                          maneuver, T, radius, arc, not(dont_wind_comp)));
+                          maneuver, T, radius, arc, not(no_wind_comp)));
   switch (maneuver)
     case 'wind_comp_on'
-      dont_wind_comp = 0;
+      no_wind_comp = 0;
     case 'wind_comp_off'
-      dont_wind_comp = 1;
+      no_wind_comp = 1;
      
     # Correcting for a crosswind demonstrates problems with Euler
     # angle representation; the solution may be to back out the crosswind-induced
@@ -39,11 +45,12 @@ function [state data] = pattern_maneuver(maneuver, radius, arc, T, dt, state,
     # the plane determined by heading and tilt. In this plane, 
     
     # inside loop has a positive arc, outside loop has a negative arc
+    # inputs: arc, radius
     case 'arc'
      
       arclen = radius * deg2rad(abs(arc));
       [quatc s_factor] = wind_correctionE(state, wind);
-      T = round(arclen / (s_factor*state.spd) / dt) * dt;
+##      T = round(arclen / (s_factor*state.spd) / dt) * dt;
 
       Nsamp = round(T / dt);
       data = zeros(Nsamp, 29);
@@ -81,6 +88,60 @@ function [state data] = pattern_maneuver(maneuver, radius, arc, T, dt, state,
 ##        state.quat = unit(quatc * state.quat); 
         # required for wind_correctionE
         [quatc s_factor] = wind_correctionE(state, wind);
+        dquat = rot2q([0 1 0], dtheta/s_factor);
+        
+##        [roll pitch yaw] = quat2euler(state.quat);
+##        disp(sprintf("in maneuver: %7s RPY: %5.1f, %5.1f, %5.1f", 
+##                                maneuver, roll, pitch, yaw));
+      endfor
+      # final quaternion determines orientation at exit, except for yaw correction
+      
+    # CW (from above) is a positive arc, CCW is a negative arc
+    # inputs: arc, radius
+    case 'circle'
+     
+      arclen = radius * deg2rad(abs(arc));
+      [quatc s_factor] = wind_correctionE(state, wind);
+      T = round(arclen / (s_factor*state.spd) / dt) * dt;
+
+      Nsamp = round(T / dt);
+      data = zeros(Nsamp, 29);
+      
+      # circle center (in x-y plane) is determined by initial orientation and position
+      # project body-frame (x-earth z) plane to circle center
+      xezp = cross(hamilton_product(state.quat, [1 0 0]), [0 0 1]);
+      xezp /= vectorNorm(xezp);
+      ctr = sign(arclen) * radius * xezp + state.pos;
+      
+      
+      # speed spd in m/sec
+      # gy in rad/sec (pitch rate)
+      gy = deg2rad(arc) / T;
+      dtheta = deg2rad(arc) / Nsamp;
+
+      gx = 0;
+      gz = 0;
+      
+      dquat = rot2q([0 0 1], dtheta);
+      dbx = [1 0 0] * state.spd;
+        
+      for idx = 1:Nsamp
+        # write current state
+        data = writeRes(data, idx, noise, pThresh, origin, rhdg,
+                        state, gx, gy, gz, quatc);
+                 
+        # update position by converting velocity to earth frame and adding wind
+        dp = (hamilton_product((quatc*state.quat), dbx) + wind) * dt;
+        state.pos += dp;
+##        disp(sprintf("%5.3f %5.3f %5.3f ", state.pos(1), state.pos(2), state.pos(3)));
+        
+        # update attitude
+        # state.quat must represent desired flight path
+        state.quat = unit(dquat * state.quat); # rotate yaw in earth frame
+        
+        # required for wind_correctionE
+        [quatc s_factor] = wind_correctionE(state, wind);
+        dquat = rot2q([0 0 1], dtheta/s_factor);
         
 ##        [roll pitch yaw] = quat2euler(state.quat);
 ##        disp(sprintf("in maneuver: %7s RPY: %5.1f, %5.1f, %5.1f", 
@@ -89,6 +150,7 @@ function [state data] = pattern_maneuver(maneuver, radius, arc, T, dt, state,
       # final quaternion determines orientation at exit, except for yaw correction
       
     # straight line with current attitude
+    # inputs: T
     case 'line'
       Nsamp = T / dt;
       data = zeros(Nsamp, 29);
@@ -108,6 +170,7 @@ function [state data] = pattern_maneuver(maneuver, radius, arc, T, dt, state,
       endfor
         
     # straight line roll through degrees specified by arc
+    # inputs: T, arc
     case 'roll'
       Nsamp = T / dt;
       data = zeros(Nsamp, 29);
@@ -146,11 +209,11 @@ function [state data] = pattern_maneuver(maneuver, radius, arc, T, dt, state,
 endfunction
 
 function [quatc s_factor] = wind_correctionE(state, wind)
-  global dont_wind_comp;
+  global no_wind_comp;
   
   quatc = quaternion(1);
   s_factor = 1;
-  if not(dont_wind_comp)
+  if not(no_wind_comp)
     # desired flightpath in earth frame
     ex = hamilton_product(state.quat, [1 0 0] * state.spd);
     # wind in earth frame
@@ -197,38 +260,7 @@ function data = writeRes(data, idx, noise, pThresh, origin, rhdg,
   data(idx,14:16) = hamilton_product(state.quat, [1 0 0]) * state.spd;
 
   # synthetic quaternion Q1-4
-  # transform from ENU to NED in the earth frame
-  # rotate x into y, y to -x, then rotate z to -z
-##  enu2ned = unit(rot2q([1 0 0], pi) * rot2q([0 0 1], pi/2));
-##  enu2ned = unit(rot2q([1 0 0], pi));
-##  quat = quat * enu2ned;  
   data(idx,17:20) = [quat.w quat.i quat.j quat.k];
-  
-##  # corrected Euler RPY
-##  # handle Euler roll/yaw indeterminacy on vertical lines
-##  # convert quaternion to Euler angles; pitch threshold for vertical is pThresh 
-##  if abs(wrappedPitch(pitch)) < pThresh
-####    avgYaw += .2 * (yaw - avgYaw);
-##    avgYaw = yaw;
-##  endif
-##  avgYaw = wrap(avgYaw);
-##  [r p y] = attFromQuat(data(idx,17:20), avgYaw, pThresh);
-##  
-##  [rollc pitchc r2hzp] = maneuver_roll_pitch(rhdg, quat);
-##  testq = r2hzp*quatc;
-##  testc = arg(testq) > 1e-6;
-##  if testc
-##    disp("error: r2hzp not inverse of quatc");
-##    arg(testq)
-##    testq
-##    quatc
-##    r2hzp
-##  endif
-##
-##  data(idx,24:26) = [rollc pitchc y];
-  
-##  lat = origin(1) + m2dLat(yp);
-##  lng = origin(2) + m2dLng(xp, origin(1));
   
   # convert lat/lon/alt to ENU meters with no rotation
   lla = xyz2lla(ned2enu(state.pos), 0, origin);
