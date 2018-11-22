@@ -17,6 +17,6 @@ function plot_track_color(segments, data,  label, snum, ...
     endTime = segments{snum}(2) - 30;
   endif
 
-  plot_tseg_color2(startTime, endTime, data, snum, label);
+  plot_maneuver(startTime, endTime, data, snum, label);
 
 endfunction

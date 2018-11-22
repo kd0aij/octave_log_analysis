@@ -1,6 +1,6 @@
-function [state data] = pattern_maneuver(maneuver, radius, arc, T, dt, state, 
-                                         noise, pThresh, origin, rhdg, wind)
-  # state comprises attitude quaternion, ECEF position and speed in a structure
+function [state data] = pattern_maneuver(mst, dt, istate, rhdg, wind)
+  # istate comprises attitude quaternion, ECEF position (meters) and speed in a structure
+  # returned state is attitude and position at end of maneuver
   # rhdg is desired ground heading
   # and wind is a velocity vector in earth frame 
   
@@ -9,18 +9,13 @@ function [state data] = pattern_maneuver(maneuver, radius, arc, T, dt, state,
   # line needs only T
   # roll needs T in addition to arc, roll rate is dependent on T and arc
   # a compact list of maneuvers therefore contains variable length commands
-  global no_wind_comp = 0;
+  data = [];  
+  state = istate;
+  origin = state.origin;
+  noise = state.noise;
+  pThresh = state.pThresh;
   
-##  [roll pitch yaw] = quat2euler(state.quat);
-##  disp(sprintf("maneuver: %10s RPY: %5.1f, %5.1f, %5.1f, T: %5.1f, r: %5.1f, a: %5.1f", 
-##                          maneuver, roll, pitch, yaw, T, radius, arc));
-  disp(sprintf("maneuver: %10s T: %5.1f, r: %5.1f, a: %5.1f wind_comp: %i", 
-                          maneuver, T, radius, arc, not(no_wind_comp)));
-  switch (maneuver)
-    case 'wind_comp_on'
-      no_wind_comp = 0;
-    case 'wind_comp_off'
-      no_wind_comp = 1;
+  switch (mst.maneuver)
      
     # Correcting for a crosswind demonstrates problems with Euler
     # angle representation; the solution may be to back out the crosswind-induced
@@ -48,22 +43,22 @@ function [state data] = pattern_maneuver(maneuver, radius, arc, T, dt, state,
     # inputs: arc, radius
     case 'arc'
      
-      arclen = radius * deg2rad(abs(arc));
+      arclen = mst.radius * deg2rad(abs(mst.arc));
       [quatc s_factor] = wind_correctionE(state, wind);
-##      T = round(arclen / (s_factor*state.spd) / dt) * dt;
+      T = round(arclen / (s_factor*state.spd) / dt) * dt;
 
       Nsamp = round(T / dt);
       data = zeros(Nsamp, 29);
       
       # loop center (in x-z plane) is determined by initial orientation and position
       # project body-frame -Z axis to arc center
-      ctr = radius * hamilton_product(state.quat, [0 0 -1]) + state.pos;
+      ctr = mst.radius * hamilton_product(state.quat, [0 0 -1]) + state.pos;
       
       
       # speed spd in m/sec
       # gy in rad/sec (pitch rate)
-      gy = deg2rad(arc) / T;
-      dtheta = deg2rad(arc) / Nsamp;
+      gy = deg2rad(mst.arc) / T;
+      dtheta = deg2rad(mst.arc) / Nsamp;
 
       gx = 0;
       gz = 0;
@@ -83,9 +78,10 @@ function [state data] = pattern_maneuver(maneuver, radius, arc, T, dt, state,
         
         # update attitude
         state.quat = unit(state.quat * dquat); # rotate pitch in body frame
-##        state.quat = unit(dquat * state.quat); # rotate pitch in earth frame
+
         # state.quat must represent desired flight path
-##        state.quat = unit(quatc * state.quat); 
+##        state.quat = unit(quatc * state.quat);
+ 
         # required for wind_correctionE
         [quatc s_factor] = wind_correctionE(state, wind);
         dquat = rot2q([0 1 0], dtheta/s_factor);
@@ -98,9 +94,10 @@ function [state data] = pattern_maneuver(maneuver, radius, arc, T, dt, state,
       
     # CW (from above) is a positive arc, CCW is a negative arc
     # inputs: arc, radius
+    #TODO: set roll angle to match turn rate
     case 'circle'
      
-      arclen = radius * deg2rad(abs(arc));
+      arclen = mst.radius * deg2rad(abs(mst.arc));
       [quatc s_factor] = wind_correctionE(state, wind);
       T = round(arclen / (s_factor*state.spd) / dt) * dt;
 
@@ -111,13 +108,13 @@ function [state data] = pattern_maneuver(maneuver, radius, arc, T, dt, state,
       # project body-frame (x-earth z) plane to circle center
       xezp = cross(hamilton_product(state.quat, [1 0 0]), [0 0 1]);
       xezp /= vectorNorm(xezp);
-      ctr = sign(arclen) * radius * xezp + state.pos;
+      ctr = sign(arclen) * mst.radius * xezp + state.pos;
       
       
       # speed spd in m/sec
       # gy in rad/sec (pitch rate)
-      gy = deg2rad(arc) / T;
-      dtheta = deg2rad(arc) / Nsamp;
+      gy = deg2rad(mst.arc) / T;
+      dtheta = deg2rad(mst.arc) / Nsamp;
 
       gx = 0;
       gz = 0;
@@ -152,7 +149,7 @@ function [state data] = pattern_maneuver(maneuver, radius, arc, T, dt, state,
     # straight line with current attitude
     # inputs: T
     case 'line'
-      Nsamp = T / dt;
+      Nsamp = mst.T / dt;
       data = zeros(Nsamp, 29);
 
       gx = 0;
@@ -172,11 +169,11 @@ function [state data] = pattern_maneuver(maneuver, radius, arc, T, dt, state,
     # straight line roll through degrees specified by arc
     # inputs: T, arc
     case 'roll'
-      Nsamp = T / dt;
+      Nsamp = mst.T / dt;
       data = zeros(Nsamp, 29);
 
       quatc = wind_correctionE(state, wind);
-      dtheta = deg2rad(arc) / Nsamp;
+      dtheta = deg2rad(mst.arc) / Nsamp;
       dquat = rot2q([1 0 0], dtheta);
 
       gx = rad2deg(dtheta) / dt;
@@ -199,21 +196,21 @@ function [state data] = pattern_maneuver(maneuver, radius, arc, T, dt, state,
       endfor
         
     otherwise
-      disp(["unsupported maneuver: " maneuver]);
+      disp(["unsupported maneuver: " mst.maneuver]);
       return
     
   endswitch
 ##  [roll pitch yaw] = quat2euler(state.quat);
 ##  disp(sprintf("end maneuver: %6s RPY: %5.1f, %5.1f, %5.1f", 
 ##                          maneuver, roll, pitch, yaw));
+
 endfunction
 
 function [quatc s_factor] = wind_correctionE(state, wind)
-  global no_wind_comp;
   
   quatc = quaternion(1);
   s_factor = 1;
-  if not(no_wind_comp)
+  if state.windcomp
     # desired flightpath in earth frame
     ex = hamilton_product(state.quat, [1 0 0] * state.spd);
     # wind in earth frame
