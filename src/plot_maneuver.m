@@ -79,15 +79,9 @@ chdg = rhdg;
 disp(sprintf("Runway heading (CW from North) is %5.1f (East) / %5.1f (West)", 
              chdg, wrap180(180+chdg)));
 
-##chdg = NaN # use ground track for maneuver heading
-if isnan(chdg)
-  disp("using ground track for maneuver heading");
-else
-  disp("assuming maneuver plane is parallel to runway");
-endif
-
 avghdg = atan2d(vENU(1,1),vENU(1,2)); # init avghdg to ground track
-onVertical = 0;
+onVertical = 1;
+lowgs = false;
 
 then = time;
 for idx = 1:Nsamp
@@ -100,16 +94,25 @@ for idx = 1:Nsamp
     if abs(pitch(idx)) < (pThresh - 0.5)
       onVertical = 0;
       # on exit from vertical line
+      disp("exit from vertical line")
       mplane = getManeuverPlane(chdg, vENU(idx,:), xyz(idx,:));
       avghdg = mplane.hdg;
       mplanes = setManeuverPlane(tsp(idx), mplanes, mplane, pitch(idx), vENU(idx,:), wca(idx));
     endif
   else
-    # while not on vertical line; update heading
+    # while not on vertical line; update heading if groundspeed is high enough
     if vectorNorm(vENU(idx,1:2)) > 2
-      chdg = atan2d(vENU(idx,1),vENU(idx,2))
+      chdg = atan2d(vENU(idx,1),vENU(idx,2));
+      if lowgs 
+        lowgs = false;
+        disp("groundspeed > threshold");
+      endif
     else
       chdg = rhdg;
+      if not(lowgs)
+        lowgs = true;
+        disp("low groundspeed: assuming maneuver plane is parallel to runway");
+      endif
     endif
     mplane = getManeuverPlane(chdg, vENU(idx,:), xyz(idx,:));
 ##    avghdg += .05 * (mplane.hdg - avghdg);
@@ -120,6 +123,7 @@ for idx = 1:Nsamp
     if abs(pitch(idx)) > pThresh
       onVertical = 1;
       # on entry to vertical line:
+      disp("entry to vertical line")
       mplane = getManeuverPlane(chdg, vENU(idx,:), xyz(idx,:));
       avghdg = mplane.hdg;
       # record maneuver plane
