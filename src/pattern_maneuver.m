@@ -27,7 +27,7 @@ function [state data] = pattern_maneuver(mst, dt, istate, rhdg, wind)
     # track into arcs and estimating the plane containing each arc. 
     # Need a parametric representation of a 3D arc: p(s) = p0 + [fx(s) fy(s) fz(s)]
     # For a circle in the x-z plane, we have (dtheta = s/R)
-    # p0 = center, fx=R*cos(s/R), fy=p0y, fz=R*sin(s/R)
+    # p0 = center, fx=R*cos(s/R), fy=p0.y, fz=R*sin(s/R)
     # For a circle in an arbitrary plane defined by p0 and orthogonal vectors hdg,v:
     # (one vector will be the heading and vertical v will ideally be Earth Z)
     # f(s) = p0 + R * cos(s/R) * hdg + R * sin(s/R) * v
@@ -40,12 +40,12 @@ function [state data] = pattern_maneuver(mst, dt, istate, rhdg, wind)
     # the plane determined by heading and tilt. In this plane, 
     
     # inside loop has a positive arc, outside loop has a negative arc
-    # inputs: arc, radius
+    # inputs: arc, radius, roll
     case 'arc'
      
       arclen = mst.radius * deg2rad(abs(mst.arc));
       [quatc s_factor] = wind_correctionE(state, wind);
-      T = round(arclen / (s_factor*state.spd) / dt) * dt;
+      T = round(arclen / state.spd / dt) * dt;
 
       Nsamp = round(T / dt);
       data = zeros(Nsamp, 29);
@@ -59,11 +59,22 @@ function [state data] = pattern_maneuver(mst, dt, istate, rhdg, wind)
       # gy in rad/sec (pitch rate)
       gy = deg2rad(mst.arc) / T;
       dtheta = deg2rad(mst.arc) / Nsamp;
+      
+      # for a rolling loop, pitch must be performed in earth frame
+      # axis of rotation is initial body Y in earth frame
+      by = hamilton_product(state.quat, [0 1 0]);
+      dquat = rot2q(by, dtheta);
 
-      gx = 0;
+      gx = deg2rad(mst.roll) / T;
+      dthetar = deg2rad(mst.roll) / Nsamp;
+      dquatr = rot2q([1 0 0], dthetar);
+      
       gz = 0;
       
-      dquat = rot2q([0 1 0], dtheta);
+##      [roll pitch yaw] = quat2euler(state.quat)
+      exitquat = unit(rot2q(by, deg2rad(mst.arc)) * state.quat * rot2q([1 0 0], deg2rad(mst.roll)));
+##      [roll pitch wca] = maneuver_roll_pitch(rhdg, exitquat, pThresh)  
+      
       dbx = [1 0 0] * state.spd;
         
       for idx = 1:Nsamp
@@ -77,35 +88,44 @@ function [state data] = pattern_maneuver(mst, dt, istate, rhdg, wind)
 ##        disp(sprintf("%5.3f %5.3f %5.3f ", state.pos(1), state.pos(2), state.pos(3)));
         
         # update attitude
-        state.quat = unit(state.quat * dquat); # rotate pitch in body frame
+        state.quat = unit(dquat * state.quat * dquatr); # pitch in earth frame, roll in body frame
 
         # state.quat must represent desired flight path
 ##        state.quat = unit(quatc * state.quat);
  
         # required for wind_correctionE
         [quatc s_factor] = wind_correctionE(state, wind);
-        dquat = rot2q([0 1 0], dtheta/s_factor);
+        dquat = rot2q(by, dtheta/s_factor);
+##        dquat = rot2q([0 1 0], dtheta/s_factor);
         
 ##        [roll pitch yaw] = quat2euler(state.quat);
 ##        disp(sprintf("in maneuver: %7s RPY: %5.1f, %5.1f, %5.1f", 
 ##                                maneuver, roll, pitch, yaw));
       endfor
       # final quaternion determines orientation at exit, except for yaw correction
+      state.quat = exitquat;
+##      [roll pitch wca] = maneuver_roll_pitch(rhdg, state.quat, pThresh)  
+      
       
     # CW (from above) is a positive arc, CCW is a negative arc
-    # inputs: arc, radius
-    #TODO: set roll angle to match turn rate
+    # inputs: 
+    # arc is the number of degrees of horizontal arc
+    # radius is the 
+    # roll
     case 'circle'
+      
+      exitquat = unit(rot2q([0 0 1], deg2rad(mst.arc)) * 
+                      state.quat * rot2q([1 0 0], deg2rad(mst.roll)));
      
       arclen = mst.radius * deg2rad(abs(mst.arc));
       [quatc s_factor] = wind_correctionE(state, wind);
       T = round(arclen / (s_factor*state.spd) / dt) * dt;
 
       Nsamp = round(T / dt);
-      data = zeros(Nsamp, 29);
+      data = []; #zeros(Nsamp, 29);
       
-      # circle center (in x-y plane) is determined by initial orientation and position
-      # project body-frame (x-earth z) plane to circle center
+      # circle center (in x-y plane) is determined by initial heading and position
+      # project (body-frame x X earth z plane) to circle center
       xezp = cross(hamilton_product(state.quat, [1 0 0]), [0 0 1]);
       xezp /= vectorNorm(xezp);
       ctr = sign(arclen) * mst.radius * xezp + state.pos;
@@ -115,14 +135,24 @@ function [state data] = pattern_maneuver(mst, dt, istate, rhdg, wind)
       # gy in rad/sec (pitch rate)
       gy = deg2rad(mst.arc) / T;
       dtheta = deg2rad(mst.arc) / Nsamp;
+      dquat = rot2q([0 0 1], dtheta);
 
-      gx = 0;
+      # gx and dthetar are wrong since the while loop below may not be Nsamp iterations
+      gx = deg2rad(mst.roll) / T;
+      rthetaRatio = mst.roll / mst.arc;
+      dthetar = rthetaRatio * dtheta;
+      dquatr = rot2q([1 0 0], dthetar);
+      
       gz = 0;
       
-      dquat = rot2q([0 0 1], dtheta);
+      [r p yaw] = quat2euler(state.quat);
+      eyaw = wrap180(yaw + mst.arc);
       dbx = [1 0 0] * state.spd;
         
-      for idx = 1:Nsamp
+      distance = 0;
+      idx = 1;
+      remyaw = abs(yaw - eyaw);
+      while idx<3 || remyaw > abs(rad2deg(dtheta))
         # write current state
         data = writeRes(data, idx, noise, pThresh, origin, rhdg,
                         state, gx, gy, gz, quatc);
@@ -130,21 +160,28 @@ function [state data] = pattern_maneuver(mst, dt, istate, rhdg, wind)
         # update position by converting velocity to earth frame and adding wind
         dp = (hamilton_product((quatc*state.quat), dbx) + wind) * dt;
         state.pos += dp;
+        distance += vectorNorm(dp);
 ##        disp(sprintf("%5.3f %5.3f %5.3f ", state.pos(1), state.pos(2), state.pos(3)));
         
         # update attitude
         # state.quat must represent desired flight path
-        state.quat = unit(dquat * state.quat); # rotate yaw in earth frame
+        state.quat = unit(dquat * state.quat * dquatr); # rotate yaw in earth frame
         
         # required for wind_correctionE
         [quatc s_factor] = wind_correctionE(state, wind);
         dquat = rot2q([0 0 1], dtheta/s_factor);
         
+        dthetar = rthetaRatio * dtheta / s_factor;
+        dquatr = rot2q([1 0 0], dthetar);
+        
 ##        [roll pitch yaw] = quat2euler(state.quat);
 ##        disp(sprintf("in maneuver: %7s RPY: %5.1f, %5.1f, %5.1f", 
 ##                                maneuver, roll, pitch, yaw));
-      endfor
-      # final quaternion determines orientation at exit, except for yaw correction
+        [r p yaw] = quat2euler(state.quat);
+        remyaw = abs(yaw - eyaw);
+        idx++;
+      endwhile
+      state.quat = exitquat;
       
     # straight line with current attitude
     # inputs: T

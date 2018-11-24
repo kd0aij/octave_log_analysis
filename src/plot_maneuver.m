@@ -79,10 +79,16 @@ chdg = rhdg;
 disp(sprintf("Runway heading (CW from North) is %5.1f (East) / %5.1f (West)", 
              chdg, wrap180(180+chdg)));
 
-chdg = NaN # use ground track for maneuver heading
-avghdg = atan2d(vENU(1,1),vENU(1,2)); # init avghdg to ground track
+##chdg = NaN # use ground track for maneuver heading
+if isnan(chdg)
+  disp("using ground track for maneuver heading");
+else
+  disp("assuming maneuver plane is parallel to runway");
+endif
 
+avghdg = atan2d(vENU(1,1),vENU(1,2)); # init avghdg to ground track
 onVertical = 0;
+
 then = time;
 for idx = 1:Nsamp
   [roll(idx) pitch(idx) wca(idx)] = maneuver_roll_pitch(avghdg, quat(idx,:), pThresh);
@@ -100,6 +106,11 @@ for idx = 1:Nsamp
     endif
   else
     # while not on vertical line; update heading
+    if vectorNorm(vENU(idx,1:2)) > 2
+      chdg = atan2d(vENU(idx,1),vENU(idx,2))
+    else
+      chdg = rhdg;
+    endif
     mplane = getManeuverPlane(chdg, vENU(idx,:), xyz(idx,:));
 ##    avghdg += .05 * (mplane.hdg - avghdg);
     avghdg = mplane.hdg;
@@ -110,6 +121,7 @@ for idx = 1:Nsamp
       onVertical = 1;
       # on entry to vertical line:
       mplane = getManeuverPlane(chdg, vENU(idx,:), xyz(idx,:));
+      avghdg = mplane.hdg;
       # record maneuver plane
       mplanes = setManeuverPlane(tsp(idx), mplanes, mplane, pitch(idx), vENU(idx,:), wca(idx));
     endif
@@ -263,11 +275,11 @@ wuroll = wrap180(uroll, rTol);
 figure(fignum++, 'position', [900,100,800,800])
 subplot(2,1,1)
 ax = plotyy(tsp, wuroll, tsp, [pitch mhdg]);
-rline = findobj(ax(1),'linestyle','-')
-set(rline,"linestyle",'-')
+rline = findobj(ax(1),'linestyle','-');
+set(rline,"linestyle",'-');
 set(rline,"marker",'.');
-set(rline,"markersize",10)
-hl = legend(ax(1), "roll", "pitch", "hdg")
+set(rline,"markersize",10);
+hl = legend(ax(1), "roll", "pitch", "hdg");
 legend(hl, "location", "northeastoutside");
 axis(ax(1), [tsp(1) tsp(end) -180-rTol 180+rTol]);
 axis(ax(2), [tsp(1) tsp(end) -180-rTol 180+rTol]);
@@ -387,10 +399,10 @@ function mplane = getManeuverPlane(chdg, vel3d, xyz)
       if not(isnan(chdg))
         if abs(wrap180(ghdg-chdg)) > 90
           hdg = wrap180(180+chdg);
-        else # use ground track 
+        else 
           hdg = chdg;
         endif
-      else
+      else # use ground track
         hdg = ghdg;
       endif
       mplane.hdg = hdg;

@@ -40,13 +40,13 @@ state.windcomp = 1;
 # runway heading: this is the angle from the North axis, positive CW
 # for runway number 6: compass heading of 60 degrees
 # for AAM east field runway compass heading of 106 degrees
-rhdg  = 120; 
+rhdg  = 106; 
 
 # rotation about earth Z to runway heading
 r2runway = rotv([0 0 1], deg2rad(90-rhdg));
 
 # m/sec in NED earth frame
-wind = [0 0 0]; 
+wind = [5 0 0]; 
 
 # straight line entry
 # center of box (150m in front of pilot), 50m AGL
@@ -70,17 +70,33 @@ pos = (r2runway * pos')';
 
 # list of maneuvers
 mlist = {
-  struct('setstate', 'wind_comp', 'on', 1);
-  struct('setstate', 'attitude', 'roll', 0, 'pitch',  0, 'yaw', rhdg);
+  struct('setstate', 'windcomp', 'on', 1);
   struct('setstate', 'position', 'x', pos(1), 'y', pos(2), 'z', pos(3));
+
+##  # rolling spiral
+##  struct('setstate', 'attitude', 'roll', 0, 'pitch',  20, 'yaw', rhdg);
+##  struct('maneuver', 'circle', 'radius', 50, 'arc', -360, 'roll', 360);
+
+
+  # straight, level, rolling entry
+  struct('setstate', 'attitude', 'roll', 0, 'pitch',  0, 'yaw', rhdg);
   struct('maneuver', 'roll', 'T', 3, 'arc', 360);
-  struct('maneuver', 'arc', 'radius', 50, 'arc', 90);
+  # 1/4 inside loop, roll to right KE, vertical, roll left to upright
+  struct('maneuver', 'arc', 'radius', 50, 'arc', 90, 'roll', 0);
   struct('maneuver', 'roll', 'T', 1, 'arc', 90);
   struct('maneuver', 'line', 'T', 1);
   struct('maneuver', 'roll', 'T', 1, 'arc', -90);
-  struct('maneuver', 'arc', 'radius', 50, 'arc', -90);
-  struct('maneuver', 'circle', 'radius', 50, 'arc', 180);
+  # 1/4 outside loop
+  struct('maneuver', 'arc', 'radius', 50, 'arc', -90, 'roll', 0);
+  # rolling half circle
+  struct('maneuver', 'circle', 'radius', 50, 'arc', -180, 'roll', 360);
+  # straight, level exit
   struct('maneuver', 'line', 'T', 3);
+  
+  
+##  struct('maneuver', 'arc', 'radius', 50, 'arc', -45, 'roll', 90);
+##  struct('maneuver', 'arc', 'radius', 50, 'arc', -45, 'roll', 0);
+##  struct('maneuver', 'line', 'T', 3);
 };
 
 then = time;
@@ -99,9 +115,9 @@ for idx = 1:length(mlist)
   switch itype
     case "setstate"
       switch getfield(item, fields(1){1})
-        case "wind_comp"
+        case "windcomp"
           val = getfield(item, "on");
-          state.wind_comp = val;
+          state.windcomp = val;
         case "attitude"
           roll = getfield(item, "roll");
           pitch = getfield(item, "pitch");
@@ -119,7 +135,7 @@ for idx = 1:length(mlist)
   endswitch
 endfor
 
-figure(7)
+figure(7, 'position', [20, 100, 800, 800])
 xyzr = res(:,27:29);
 plot3Dline(xyzr, 'o');
 axis equal
@@ -146,13 +162,17 @@ res(1:Nsamp,1) = pts;
 
 disp(sprintf("maneuver generation time: %f", time-then));
 
-# plot maneuver
-yawCor = rad2deg(atan2(vectorNorm(wind), state.spd));
+fflush (stdout);
+ans = input("plot? ", "s");
+if ans == 'y' || ans == 'Y'  
+  # plot
+  yawCor = rad2deg(atan2(vectorNorm(wind), state.spd));
 
-rollTolerance = 10;
-plot_title = sprintf("roll tolerance %d degrees, crosswind : %5.1f deg",
-                     rollTolerance, yawCor);
-plot_maneuver(0, (Nsamp-1)*dt, res, 77, 'test_maneuvers',
-                 state.origin, rollTolerance, 2, rhdg=rhdg, state.pThresh, plot_title);
+  rollTolerance = 10;
+  plot_title = sprintf("roll tolerance %d degrees, crosswind : %5.1f deg",
+                       rollTolerance, yawCor);
+  plot_maneuver(0, (Nsamp-1)*dt, res, 77, 'test_maneuvers',
+                   state.origin, rollTolerance, 2, rhdg=rhdg, state.pThresh, plot_title);
+endif
 
 endfunction
