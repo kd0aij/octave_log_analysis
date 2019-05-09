@@ -174,10 +174,10 @@ axis tight
 grid minor
 # save figure
 savefig("eulerVmp", label, mnum, 1080, 540);
-fname = sprintf("%s_eulerVmp_%d", label, mnum);
-disp(sprintf("saving 3D track display: %s", fname));
-print ([fname ".jpg"], "-S1080,540")
-hgsave ([fname ".jpg"])
+#fname = sprintf("%s_eulerVmp_%d", label, mnum);
+#disp(sprintf("saving 3D track display: %s", fname));
+#print ([fname ".jpg"], "-S1080,540")
+#hgsave ([fname ".jpg"])
 
 colors = ones(length(roll),3);
 red = hsv2rgb([0,1,1]);

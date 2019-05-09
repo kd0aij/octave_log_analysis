@@ -10,7 +10,7 @@ echo "running mavtomfile.py --types POS,GPS,ATT,IMU,NKF1,NKQ1 "$2".bin"
 mavtomfile.py --types POS,GPS,ATT,IMU,NKF1,NKQ1 "$2".bin 
 cp "$2".m ~/git/kd0aij/octave_log_analysis/src/temp.m
 cd ~/git/kd0aij/octave_log_analysis/src
-cat buildWorkspace.m > buildWorkspace_tmp.m
+cat buildWork_template.m > buildWorkspace_tmp.m
 echo "label='"$2"'" >> buildWorkspace_tmp.m
 echo "label=[label(regexp(label,'[^0]')(1):end)]" >> buildWorkspace_tmp.m
 echo "plot_segments" >> buildWorkspace_tmp.m

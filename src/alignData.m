@@ -49,11 +49,11 @@ qsi = getSampleInterval(qts);
 # use the largest of ATT,POS,IMU,NKF1,NKQ1 as the common sample interval
 csi = max([asi psi isi nsi qsi])
 
-astep = csi/asi;
-pstep = csi/psi;
-istep = csi/isi;
-nstep = csi/nsi;
-qstep = csi/qsi;
+astep = round(csi/asi);
+pstep = round(csi/psi);
+istep = round(csi/isi);
+nstep = round(csi/nsi);
+qstep = round(csi/qsi);
 
 # find the record numbers for start and end times
 [s_ats e_ats, Na] = findStartEnd(ats, csi, astep, startTime, endTime);
