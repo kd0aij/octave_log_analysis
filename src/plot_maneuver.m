@@ -14,9 +14,9 @@ function plot_maneuver(startTime, endTime, data,
 # GyrX, GyrY, GyrZ, AccX, AccY, AccZ, VE, VN, VD
 
 # 17:20, 21, 22, 23
-# Q1-4,   R,  P,  Y (corrected Euler angles "fixed xyz")
+# Q1-4
 
-#  24,  25,  26
+#  21, 22, 23
 # Lat, Lng, Alt (GPS based)
 
 # posIndex defaults to 2 for POS based Lat,Lng,Alt
