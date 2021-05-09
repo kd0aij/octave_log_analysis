@@ -213,7 +213,7 @@ function [state data] = pattern_maneuver(mst, dt, istate, rhdg, wind)
       dtheta = deg2rad(mst.arc) / Nsamp;
       dquat = rot2q([1 0 0], dtheta);
 
-      gx = rad2deg(dtheta) / dt;
+      gx = dtheta / dt;
       gy = 0;
       gz = 0;
       

@@ -6,8 +6,8 @@ echo "basepath:" $1
 echo "input logfile:" $2
 rm temp.m
 cd $1
-echo "running mavtomfile.py --types POS,GPS,ATT,IMU,NKF1,NKQ1 "$2".bin"
-mavtomfile.py --types POS,GPS,ATT,IMU,NKF1,NKQ1 "$2".bin 
+echo "running mavtomfile.py --types POS,GPS,ATT,IMU,NKF1,NKQ1,BARO "$2".bin"
+mavtomfile.py --types POS,GPS,ATT,IMU,NKF1,NKQ1,BARO "$2".bin 
 cp "$2".m ~/git/kd0aij/octave_log_analysis/src/temp.m
 cd ~/git/kd0aij/octave_log_analysis/src
 cat buildWork_template.m > buildWorkspace_tmp.m

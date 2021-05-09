@@ -24,6 +24,7 @@ function some_maneuvers()
 # 24:26)(corrected Euler)Roll, Pitch, Yaw
 
 pkg load quaternion
+pkg load matgeom
 
 clear res;
 close all;
@@ -36,7 +37,7 @@ res = [];
 pThresh = 85;
 noise = 0; # degrees
 rhdg = 0; # runway heading
-xwind = 15; # m/sec along body-frame Y axis
+xwind = 5; # m/sec along body-frame Y axis
 
 radius = 50;
 

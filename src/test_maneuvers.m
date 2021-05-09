@@ -73,10 +73,9 @@ mlist = {
   struct('setstate', 'windcomp', 'on', 1);
   struct('setstate', 'position', 'x', pos(1), 'y', pos(2), 'z', pos(3));
 
-##  # rolling spiral
-##  struct('setstate', 'attitude', 'roll', 0, 'pitch',  20, 'yaw', rhdg);
-##  struct('maneuver', 'circle', 'radius', 50, 'arc', -360, 'roll', 360);
-
+  # rolling spiral
+  struct('setstate', 'attitude', 'roll', 0, 'pitch',  20, 'yaw', rhdg);
+  struct('maneuver', 'circle', 'radius', 50, 'arc', -360, 'roll', 360);
 
   # straight, level, rolling entry
   struct('setstate', 'attitude', 'roll', 0, 'pitch',  0, 'yaw', rhdg);
@@ -93,10 +92,9 @@ mlist = {
   # straight, level exit
   struct('maneuver', 'line', 'T', 3);
   
-  
-##  struct('maneuver', 'arc', 'radius', 50, 'arc', -45, 'roll', 90);
-##  struct('maneuver', 'arc', 'radius', 50, 'arc', -45, 'roll', 0);
-##  struct('maneuver', 'line', 'T', 3);
+  struct('maneuver', 'arc', 'radius', 50, 'arc', -90, 'roll', 90);
+  struct('maneuver', 'arc', 'radius', 50, 'arc', -90, 'roll', -90);
+  struct('maneuver', 'line', 'T', 3);
 };
 
 then = time;
@@ -135,16 +133,16 @@ for idx = 1:length(mlist)
   endswitch
 endfor
 
-figure(7, 'position', [20, 100, 800, 800])
-xyzr = res(:,27:29);
-plot3Dline(xyzr, 'o');
-axis equal
-grid on
-rotate3d on
-title('full')
-xlabel('East')
-ylabel('North')
-zlabel('Alt')
+##figure(7, 'position', [20, 100, 800, 800])
+##xyzr = res(:,27:29);
+##plot3Dline(xyzr, 'o');
+##axis equal
+##grid on
+##rotate3d on
+##title('full')
+##xlabel('East')
+##ylabel('North')
+##zlabel('Alt')
 
 ### find heading by fitting a line to xy data
 ##X = [ones(length(data),1) data(:,27)];
@@ -163,8 +161,8 @@ res(1:Nsamp,1) = pts;
 disp(sprintf("maneuver generation time: %f", time-then));
 
 fflush (stdout);
-ans = input("plot? ", "s");
-if ans == 'y' || ans == 'Y'  
+##ans = input("plot? ", "s");
+##if ans == 'y' || ans == 'Y'  
   # plot
   yawCor = rad2deg(atan2(vectorNorm(wind), state.spd));
 
@@ -173,6 +171,6 @@ if ans == 'y' || ans == 'Y'
                        rollTolerance, yawCor);
   plot_maneuver(0, (Nsamp-1)*dt, res, 77, 'test_maneuvers',
                    state.origin, rollTolerance, 2, rhdg=rhdg, state.pThresh, plot_title);
-endif
+##endif
 
 endfunction
