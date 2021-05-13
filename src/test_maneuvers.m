@@ -40,7 +40,7 @@ state.windcomp = 1;
 # runway heading: this is the angle from the North axis, positive CW
 # for runway number 6: compass heading of 60 degrees
 # for AAM east field runway compass heading of 106 degrees
-rhdg  = 106; 
+rhdg  = 90; 
 
 # rotation about earth Z to runway heading
 r2runway = rotv([0 0 1], deg2rad(90-rhdg));
@@ -75,7 +75,7 @@ mlist = {
 
   # rolling spiral
   struct('setstate', 'attitude', 'roll', 0, 'pitch',  20, 'yaw', rhdg);
-  struct('maneuver', 'circle', 'radius', 50, 'arc', -360, 'roll', 360);
+  struct('maneuver', 'circle', 'radius', 50, 'arc', -360, 'roll', -360);
 
   # straight, level, rolling entry
   struct('setstate', 'attitude', 'roll', 0, 'pitch',  0, 'yaw', rhdg);
@@ -88,7 +88,7 @@ mlist = {
   # 1/4 outside loop
   struct('maneuver', 'arc', 'radius', 50, 'arc', -90, 'roll', 0);
   # rolling half circle
-  struct('maneuver', 'circle', 'radius', 50, 'arc', -180, 'roll', 360);
+  struct('maneuver', 'circle', 'radius', 50, 'arc', -180, 'roll', -360);
   # straight, level exit
   struct('maneuver', 'line', 'T', 3);
   
@@ -135,8 +135,20 @@ endfor
 
 ##figure(7, 'position', [20, 100, 800, 800])
 ##xyzr = res(:,27:29);
+##Nsamp = size(xyzr)(1);
 ##plot3Dline(xyzr, 'o');
 ##axis equal
+### plot wing planes at intervals
+##hold on
+##quat = res(:,17:20);
+##[wx, wy, wz] = ellipsoid(0, 0, 0, 0.1, 10, 0.01);
+##for idx = 1:10:Nsamp
+##  # rotate and translate from body to world
+##  R = q2rotm(quat(idx,:));
+##  [rx, ry, rz] = rellips(R, wx, wy, wz, xyzr(idx,:));
+##  s1 = surf(rx, ry, rz);
+##  set(s1,'facealpha',0.2);
+##endfor
 ##grid on
 ##rotate3d on
 ##title('full')
@@ -169,8 +181,10 @@ fflush (stdout);
   rollTolerance = 10;
   plot_title = sprintf("roll tolerance %d degrees, crosswind : %5.1f deg",
                        rollTolerance, yawCor);
-  plot_maneuver(0, (Nsamp-1)*dt, res, 77, 'test_maneuvers',
-                   state.origin, rollTolerance, 2, rhdg=rhdg, state.pThresh, plot_title);
+##  plot_maneuver(0, (Nsamp-1)*dt, res, 77, 'test_maneuvers',
+##                           state.origin, rollTolerance, 2, rhdg=rhdg, state.pThresh, plot_title);
+  plot_maneuver_simplified(0, (Nsamp-1)*dt, res, 77, 'test_maneuvers',
+                           state.origin, rollTolerance, 2, rhdg=rhdg, state.pThresh, plot_title);
 ##endif
 
 endfunction

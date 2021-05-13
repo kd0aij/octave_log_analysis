@@ -1,5 +1,5 @@
-function plot_tseg_color2(startTime, endTime, data,
-  mnum=1, label='untitled', origin=[39.8420194 -105.2123333 1808],
+function plot_maneuver_simplified(startTime, endTime, data,
+  mnum=0, label='untitled', origin=[39.8420194 -105.2123333 1808], 
   rTol=15, posIndex=2, rhdg=106, pThresh=88, plotTitle='')
   
 # rhdg is runway heading: 0 is North, 90 is East
@@ -14,9 +14,9 @@ function plot_tseg_color2(startTime, endTime, data,
 # GyrX, GyrY, GyrZ, AccX, AccY, AccZ, VE, VN, VD
 
 # 17:20, 21, 22, 23
-# Q1-4,   R,  P,  Y (corrected Euler angles "fixed xyz")
+# Q1-4
 
-#  24,  25,  26
+#  21, 22, 23
 # Lat, Lng, Alt (GPS based)
 
 # posIndex defaults to 2 for POS based Lat,Lng,Alt
@@ -75,93 +75,55 @@ e_pitch = data(startIndex:endIndex,6);
 # compute roll/pitch in maneuver plane
 mhdg = zeros(Nsamp, 1);
 mplanes = [];
-chdg = rhdg;
+ghdg = rhdg;
 disp(sprintf("Runway heading (CW from North) is %5.1f (East) / %5.1f (West)", 
-             chdg, wrap180(180+chdg)));
-
-chdg = NaN # use ground track for maneuver heading
-avghdg = atan2d(vENU(1,1),vENU(1,2)); # init avghdg to ground track
+             rhdg, wrap180(180+rhdg)));
 
 onVertical = 0;
+lowgs = false;
+
 then = time;
 for idx = 1:Nsamp
-  [roll(idx) pitch(idx) wca(idx)] = maneuver_roll_pitch(avghdg, quat(idx,:), pThresh);
-  mhdg(idx) = avghdg;
-  # crosswind is ~ |vENU|*sin(wca): so percentage of earthframe velocity is:
-  xwnd(idx) = 100 * abs(sind(wca(idx)));
+  # determine maneuver heading based on whether this is a vertical line
+  fq = quaternion(quat(idx,1), quat(idx,2), quat(idx,3), quat(idx,4));
+  epitch = real(rad2deg( asin(2*(fq.w*fq.y - fq.z*fq.x))));
   if onVertical
     # hysteresis
-    if abs(pitch(idx)) < (pThresh - 0.5)
+    if (abs(epitch) < (pThresh - 0.5)) && ((norm([vENU(idx,1), vENU(idx,2)]) > 2.5))
       onVertical = 0;
       # on exit from vertical line
-      mplane = getManeuverPlane(chdg, vENU(idx,:), xyz(idx,:));
-      avghdg = mplane.hdg;
-      mplanes = setManeuverPlane(tsp(idx), mplanes, mplane, pitch(idx), vENU(idx,:), wca(idx));
+      # use ground heading to define maneuver plane
+      disp("exit from vertical line")
     endif
   else
-    # while not on vertical line; update heading
-    mplane = getManeuverPlane(chdg, vENU(idx,:), xyz(idx,:));
-##    avghdg += .05 * (mplane.hdg - avghdg);
-    avghdg = mplane.hdg;
-    
-    # specify maneuver heading as current ground course    
-    # vertical line if pitch > threshold
-    if abs(pitch(idx)) > pThresh
+    # vertical line if pitch > threshold or groundspeed is low
+    if (abs(epitch) > pThresh) || (norm([vENU(idx,1), vENU(idx,2)]) < 2)
       onVertical = 1;
       # on entry to vertical line:
-      mplane = getManeuverPlane(chdg, vENU(idx,:), xyz(idx,:));
-      # record maneuver plane
-      mplanes = setManeuverPlane(tsp(idx), mplanes, mplane, pitch(idx), vENU(idx,:), wca(idx));
-    endif
+      disp("entry to vertical line")
+      # pick aerobatic box heading using previous ground heading
+      mplane.hdg = getManeuverPlane(rhdg, ghdg);
+      mplane.pos = xyz(idx,:);
+      disp(sprintf("maneuver heading %3.0f", mplane.hdg));
+      # record vertical maneuver plane
+      mplanes = setManeuverPlane(tsp(idx), mplanes, mplane, epitch, vENU(idx,:), wca(idx));
+    else
+      # not on a vertical line, update ground heading
+      #TODO: this needs to be from the entry heading; it's not reliable on verticals
+      ghdg = atan2d(vENU(idx,1),vENU(idx,2));
+    endif  
   endif
+  if onVertical
+    mhdg(idx) = mplane.hdg;
+  else
+    mhdg(idx) = ghdg;
+  end
+  # with maneuver plane determined, calculate maneuver roll, pitch and wind correction angle
+  [roll(idx) pitch(idx) wca(idx)] = maneuver_roll_pitch(mhdg(idx), quat(idx,:), pThresh);
+  # crosswind is ~ |vENU|*sin(wca): so percentage of earthframe velocity is:
+  xwnd(idx) = 100 * abs(sind(wca(idx)));
 endfor
 disp(sprintf("maneuver_roll_pitch elapsed time: %f", time-then));
-
-fignum = mnum * 10;
-figure(fignum++)
-plot3Dline(xyz, '-');
-axis equal
-grid on
-rotate3d on
-title('unrotated xyz')
-xlabel('East')
-ylabel('True North')
-zlabel('Alt')
-# save figure
-savefig("3D", label, mnum, 800, 800);
-
-# plot maneuver plane: vertical, rotated to maneuver heading
-hold on
-limits=axis();
-for idx = 1:length(mplanes)
-  x = [0; 0];
-  y = [-50; 50];
-  # rotate to heading
-  theta = 180 - mplanes(idx).hdg;
-  xyr = [cosd(theta)*x.-sind(theta)*y, sind(theta)*x.+cosd(theta)*y];
-  # translate to vehicle position
-  xyr(:,1:2) += mplanes(idx).pos(1:2);
-  [xx yy] = meshgrid(xyr(:,1),xyr(:,2));
-  zz = [-100 -100; 100 100] + mplanes(idx).pos(3);
-  s1 = surf(xx,yy',zz); #, 'Edgecolor', 'none');
-  set(s1,'facealpha',0.2);
-endfor
-
-figure(fignum++, 'position', [400,50,1080,400])
-hold on
-plot(tsp,  yaw, 'og', tsp, e_pitch, 'ob',tsp, wrap180(unwrapd(e_roll), rTol), 'oc')
-plot(tsp, mhdg, '*-m', tsp, pitch, '*-k', tsp, wrap180(unwrapd(roll), rTol), '*-r')
-plot(tsp, xwnd, '-k')
-title('Euler RPY vs. maneuver RPY')
-legend(['eyaw'; 'epitch'; 'eroll'; 'mhdg'; 'pitch'; 'roll'; 'xwnd %'])
-axis tight
-grid minor
-# save figure
-savefig("eulerVmp", label, mnum, 1080, 540);
-fname = sprintf("%s_eulerVmp_%d", label, mnum);
-disp(sprintf("saving 3D track display: %s", fname));
-print ([fname ".jpg"], "-S1080,540")
-hgsave ([fname ".jpg"])
 
 colors = ones(length(roll),3);
 red = hsv2rgb([0,1,1]);
@@ -193,7 +155,80 @@ for idx = 1:length(colors)
     rollErr = [rollErr idx];
   endif
 endfor
-sizes = 10 * ones(length(colors),1);
+sizes = 4 * ones(length(colors),1);
+
+fignum = mnum * 10;
+figure(fignum++)
+##axes('Projection','orthographic')
+scatter3(xyz(:,1), xyz(:,2), xyz(:,3), 8, colors);
+axis equal
+grid on
+rotate3d on
+title('xyz')
+xlabel('East')
+ylabel('True North')
+zlabel('Alt')
+
+# plot maneuver plane: vertical, rotated to maneuver heading
+hold on
+limits=axis();
+for idx = 1:length(mplanes)
+  x = [0; 0];
+  y = [-50; 25];
+  # rotate to heading
+  theta = 180 - mplanes(idx).hdg;
+  xyr = [cosd(theta)*x.-sind(theta)*y, sind(theta)*x.+cosd(theta)*y];
+  # translate to vehicle position
+  xyr(:,1:2) += mplanes(idx).pos(1:2);
+  [xx yy] = meshgrid(xyr(:,1),xyr(:,2));
+  zz = [-25 -25; 25 25] + mplanes(idx).pos(3);
+  s1 = surf(xx, yy', zz); #, 'Edgecolor', 'none');
+  set(s1, 'facealpha', 0.2);
+endfor
+
+# plot wing planes at intervals
+hold on
+scale = 10;
+wx = [-.1; .1];
+wy = [-1; 1];
+xx = zeros(2,2);
+yy = zeros(2,2);
+zz = zeros(2,2);
+for idx = 1:10:Nsamp
+  # rotate and translate from body to world NED
+  q = quaternion(quat(idx,1), quat(idx,2), quat(idx,3), quat(idx,4));
+  R = q2rotm(q);
+  for n = 1:2
+    for m = 1:2
+      v = R * (scale * [wx(n); wy(m); 0]);
+      xx(m,n) =  v(2) + xyz(idx,1);
+      yy(m,n) =  v(1) + xyz(idx,2);
+      zz(m,n) = -v(3) + xyz(idx,3);
+    end
+  end
+  s1 = surf(xx, yy, zz);
+  set(s1, 'facealpha', 0.2);
+endfor
+# save figure
+savefig("3D", label, mnum, 800, 800);
+
+##return
+
+figure(fignum++, 'position', [400,50,1080,400])
+hold on
+plot(tsp,  yaw, 'og', tsp, e_pitch, 'ob',tsp, wrap180(unwrapd(e_roll), rTol), 'oc')
+plot(tsp, mhdg, '*-m', tsp, pitch, '*-k', tsp, wrap180(unwrapd(roll), rTol), '*-r')
+plot(tsp, xwnd, '-k')
+title('Euler RPY vs. maneuver RPY')
+legend(['eyaw'; 'epitch'; 'eroll'; 'mhdg'; 'pitch'; 'roll'; 'xwnd %'])
+axis tight
+grid minor
+# save figure
+savefig("eulerVmp", label, mnum, 1080, 540);
+#fname = sprintf("%s_eulerVmp_%d", label, mnum);
+#disp(sprintf("saving 3D track display: %s", fname));
+#print ([fname ".jpg"], "-S1080,540")
+#hgsave ([fname ".jpg"])
 
 # plot 5 second time intervals
 thacks = [];
@@ -207,19 +242,19 @@ endif
 fignum
 figure(fignum++, 'position', [100,100,800,800])
 subplot(2,2,1)
-scatterPlot(xyzr, 1, 2, sizes, colors, blue, [-350 350])
+scatterPlot(xyz, 1, 2, sizes, colors, blue, [-350 350])
 title (sprintf("Plan view\n%s", plotTitle))
 xlabel "east (m)"
 ylabel "north (m)"
 
 subplot(2,2,2)
-scatterPlot(xyzr, 1, 3, sizes, colors, blue, [-350 350])
+scatterPlot(xyz, 1, 3, sizes, colors, blue, [-350 350])
 title (sprintf("North elevation"))
 xlabel "east (m)"
 ylabel "alt (m)"
 
 subplot(2,2,3)
-scatterPlot(xyzr, 2, 3, sizes, colors, blue, [0 300])
+scatterPlot(xyz, 2, 3, sizes, colors, blue, [0 300])
 title (sprintf("East elevation"))
 xlabel "north (m)"
 ylabel "alt (m)"
@@ -239,6 +274,7 @@ for idx = 1:length(yGrid)
   plot([limits(1) limits(2)],[-yGrid(idx),-yGrid(idx)],'-b');
   plot([limits(1) limits(2)],[ yGrid(idx), yGrid(idx)],'-b');
 endfor
+
 xticks(thacks);
 xlabels={};
 for idx=1:length(thacks)
@@ -263,12 +299,10 @@ wuroll = wrap180(uroll, rTol);
 figure(fignum++, 'position', [900,100,800,800])
 subplot(2,1,1)
 ax = plotyy(tsp, wuroll, tsp, [pitch mhdg]);
-rline = findobj(ax(1),'linestyle','-')
-set(rline,"linestyle",'-')
+rline = findobj(ax(1),'linestyle','-');
+set(rline,"linestyle",'-');
 set(rline,"marker",'.');
-set(rline,"markersize",10)
-hl = legend(ax(1), "roll", "pitch", "hdg")
-legend(hl, "location", "northeastoutside");
+set(rline,"markersize",10);
 axis(ax(1), [tsp(1) tsp(end) -180-rTol 180+rTol]);
 axis(ax(2), [tsp(1) tsp(end) -180-rTol 180+rTol]);
 grid(ax(1), 'on')
@@ -284,8 +318,12 @@ hold on
 
 # highlight roll error > rTol
 if length(rollErr) > 0
-  plot(ax(1), tsp(rollErr), roll(rollErr), 'ob');
+  plot(ax(1), tsp(rollErr), roll(rollErr), '.r');
 endif
+h1 = legend(ax(1), "roll", "rTol");
+h2 = legend(ax(2), "pitch", "hdg");
+legend(h1, "location", "northwest");
+legend(h2, "location", "northeast");
 
 # plot x axis time hacks
 xoffset = (limits(2)-limits(1))/(length(thacks)*4);
@@ -316,7 +354,6 @@ yticklabels(ax(1), yTickLabels);
 yTicks = [-180 -135 -90 -45 0 45 90 135 180];
 yticks(ax(2), yTicks);
 
-
 title (sprintf("roll, pitch, maneuver hdg"))
 xlabel "time"
 ylabel(ax(1), "roll attitude")
@@ -327,9 +364,9 @@ plot(tsp,rad2deg(gv),'.-')
 limits=axis();
 xoffset = (limits(2)-limits(1))/(length(thacks)*4);
 yoffset = limits(3) + (limits(4)-limits(3))/40;
-hold on
-xticks(thacks);
-xticklabels(xlabels);
+#hold on
+#xticks(thacks);
+#xticklabels(xlabels);
 axis([tsp(1),tsp(end),limits(3),limits(4)])
 grid on
 
@@ -380,21 +417,20 @@ function savefig(name, label, mnum, width, height)
   hgsave ([fname ".ofig"]) 
 endfunction
 
-function mplane = getManeuverPlane(chdg, vel3d, xyz)
+function mhdg = getManeuverPlane(rhdg, ghdg)
       # calculate maneuver plane
-      ghdg = atan2d(vel3d(1),vel3d(2));
-      # if chdg is provided, constrain hdg to {chdg, 180+chdg}
-      if not(isnan(chdg))
-        if abs(wrap180(ghdg-chdg)) > 90
-          hdg = wrap180(180+chdg);
-        else # use ground track 
-          hdg = chdg;
-        endif
-      else
-        hdg = ghdg;
+      # constrain hdg to box or cross-box
+      # cross-box heading
+      chdg = wrap180(rhdg+90);
+      if abs(ghdg-rhdg) < 45
+        mhdg = rhdg;
+      elseif abs(wrap180(ghdg-rhdg)) < 45
+        mhdg = wrap180(180+rhdg);
+      elseif abs(ghdg-chdg) < 45
+        mhdg = chdg;
+      else  
+        mhdg = wrap180(180+chdg);
       endif
-      mplane.hdg = hdg;
-      mplane.pos = xyz;
 endfunction
 
 function mplanes = setManeuverPlane(t, mplanes, mplane, pitch, vel3d, wca)

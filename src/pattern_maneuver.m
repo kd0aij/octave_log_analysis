@@ -1,8 +1,10 @@
 function [state data] = pattern_maneuver(mst, dt, istate, rhdg, wind)
-  # istate comprises attitude quaternion, ECEF position (meters) and speed in a structure
-  # returned state is attitude and position at end of maneuver
+  # Body frame is NED, all state calculations are done in body frame
+  # but data.pos is maintained as ENU.
+  # istate comprises attitude quaternion, NED position (meters) and speed in a structure
+  # returned state is NED attitude and position at end of maneuver
   # rhdg is desired ground heading
-  # and wind is a velocity vector in earth frame 
+  # and wind is a velocity vector in NED? frame 
   
   # refactoring: various maneuvers require different parameters:
   # arc needs #degrees of arc and radius but T is dependent on arclength and speed
@@ -174,10 +176,8 @@ function [state data] = pattern_maneuver(mst, dt, istate, rhdg, wind)
         dthetar = rthetaRatio * dtheta / s_factor;
         dquatr = rot2q([1 0 0], dthetar);
         
-##        [roll pitch yaw] = quat2euler(state.quat);
-##        disp(sprintf("in maneuver: %7s RPY: %5.1f, %5.1f, %5.1f", 
-##                                maneuver, roll, pitch, yaw));
-        [r p yaw] = quat2euler(state.quat);
+        [roll pitch yaw] = quat2euler(state.quat);
+##        disp(sprintf("in maneuver: %7s RPY: %5.1f, %5.1f, %5.1f", mst.maneuver, roll, pitch, yaw));
         remyaw = abs(yaw - eyaw);
         idx++;
       endwhile
@@ -267,6 +267,8 @@ function [quatc s_factor] = wind_correctionE(state, wind)
   endif
 endfunction
 
+# convert state.pos from NED to ENU for output
+# add noise to output position and euler roll
 function data = writeRes(data, idx, noise, pThresh, origin, rhdg,
                   state, gx, gy, gz, quatc)
                   # pThresh is not used
@@ -296,7 +298,7 @@ function data = writeRes(data, idx, noise, pThresh, origin, rhdg,
   # synthetic quaternion Q1-4
   data(idx,17:20) = [quat.w quat.i quat.j quat.k];
   
-  # convert lat/lon/alt to ENU meters with no rotation
+  # convert ENU x,y,z to lat/lon/alt with no rotation
   lla = xyz2lla(ned2enu(state.pos), 0, origin);
   
   # POS, GPS
