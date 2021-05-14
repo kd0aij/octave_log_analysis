@@ -73,9 +73,9 @@ mlist = {
   struct('setstate', 'windcomp', 'on', 1);
   struct('setstate', 'position', 'x', pos(1), 'y', pos(2), 'z', pos(3));
 
-##  # rolling spiral
-##  struct('setstate', 'attitude', 'roll', 0, 'pitch',  20, 'yaw', rhdg);
-##  struct('maneuver', 'circle', 'radius', 50, 'arc', -360, 'roll', -360);
+  # rolling spiral
+  struct('setstate', 'attitude', 'roll', 0, 'pitch',  20, 'yaw', rhdg);
+  struct('maneuver', 'circle', 'radius', 50, 'arc', -360, 'roll', -360);
 
   # straight, level, rolling entry
   struct('setstate', 'attitude', 'roll', 0, 'pitch',  0, 'yaw', rhdg);

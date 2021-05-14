@@ -17,6 +17,7 @@ function plot_track_color(segments, data,  label, snum, ...
     endTime = segments{snum}(2) - 30;
   endif
 
-  plot_maneuver_simplified(startTime, endTime, data, snum, label);
+##  plot_maneuver_simplified(startTime, endTime, data, snum, label);
+  plot_maneuver_rotated(startTime, endTime, data, snum, label);
 
 endfunction

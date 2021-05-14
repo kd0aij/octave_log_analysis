@@ -1,4 +1,4 @@
-function plot_maneuver_simplified(startTime, endTime, data,
+function plot_maneuver_rotated(startTime, endTime, data,
   mnum=0, label='untitled', origin=[39.8420194 -105.2123333 1808], 
   rTol=15, posIndex=2, rhdg=106, pThresh=88, plotTitle='')
   
@@ -56,7 +56,8 @@ quat = data(startIndex:endIndex,17:20);
 # convert to meters from origin
 xyz = lla2xyz([lat lon z], 0, origin);
 # and rotate parallel to runway
-xyzr = lla2xyz([lat lon z], rhdg-90, origin);
+r2box = rhdg - 90;
+xyzr = lla2xyz([lat lon z], r2box, origin);
 
 # assign colors representing roll angle
 # roll range is (-180,180] degrees
@@ -114,8 +115,8 @@ for idx = 2:Nsamp
       # use ground heading to define maneuver plane
       disp("exit from vertical line")
       # set maneuver plane heading to current ground heading
-      mplane.hdg = ghdg(idx);
-      mplane.pos = xyz(idx,:);
+      mplane.hdg = ghdg(idx) - r2box;
+      mplane.pos = xyzr(idx,:);
       mplane.entry = false;
       disp(sprintf("ground heading: %3.0f, maneuver heading %3.0f", ghdg(idx), mplane.hdg));
       # record ground heading maneuver plane
@@ -131,8 +132,8 @@ for idx = 2:Nsamp
       # on entry to vertical line:
       disp("entry to vertical line")
       # pick aerobatic box heading using previous ground heading
-      mplane.hdg = getManeuverPlane(rhdg, ghdg(idx-1));
-      mplane.pos = xyz(idx,:);
+      mplane.hdg = getManeuverPlane(rhdg, ghdg(idx-1)) - r2box;
+      mplane.pos = xyzr(idx,:);
       mplane.entry = true;
       mhdg(idx) = mplane.hdg;
       disp(sprintf("ground heading: %3.0f, maneuver heading %3.0f", ghdg(idx), mplane.hdg));
@@ -175,8 +176,8 @@ endfor
 sizes = 4 * ones(length(colors),1);
 
 fignum = mnum * 10;
-figure(fignum++)
-scatter3(xyz(:,1), xyz(:,2), xyz(:,3), 8, colors);
+figure(fignum++, 'position', [900,100,800,800])
+scatter3(xyzr(:,1), xyzr(:,2), xyzr(:,3), 8, colors);
 axis equal
 grid on
 rotate3d on
@@ -200,9 +201,9 @@ for idx = 1:length(mplanes)
   xyr(:,1:2) += mplanes(idx).pos(1:2);
   [xx yy] = meshgrid(xyr(:,1),xyr(:,2));
   zz = [-25 -25; 25 25] + mplanes(idx).pos(3);
-  # yellow for vertical entry, green for exit
+  # red for vertical entry, green for exit
   if mplanes(idx).entry
-    pcolor = yellow;
+    pcolor = red;
   else
     pcolor = green;
   endif
@@ -212,6 +213,9 @@ for idx = 1:length(mplanes)
   s1 = surf(xx, yy', zz, cmat);
   set(s1, 'facealpha', 0.1);
 endfor
+
+# rotate to runway heading
+q2runway = rot2q([0 0 1], deg2rad(-r2box));
 
 # plot delta wing planes at intervals
 hold on
@@ -229,18 +233,51 @@ cmat = zeros(2,3,3);
 for idx = 1:10:Nsamp
   # rotate and translate from body to world NED
   q = quaternion(quat(idx,1), quat(idx,2), quat(idx,3), quat(idx,4));
+  q = q2runway * q;
   R = q2rotm(q);
   for n = 1:3
     for m = 1:2
       v = R * (scale * [wx(m,n); wy(m,n); 0]);
-      xx(m,n) =  v(2) + xyz(idx,1);
-      yy(m,n) =  v(1) + xyz(idx,2);
-      zz(m,n) = -v(3) + xyz(idx,3);
+      xx(m,n) =  v(2) + xyzr(idx,1);
+      yy(m,n) =  v(1) + xyzr(idx,2);
+      zz(m,n) = -v(3) + xyzr(idx,3);
       cmat(m,n,:) = colors(idx,:);
     end
   end
   s1 = surf(xx, yy, zz, cmat);
 endfor
+
+# add tail fins at intervals
+hold on
+scale = 10;
+x = [-0.1 0.3;
+     -0.1 0.3];
+z = [0 0;
+     0 0];
+y = [0 0;
+     -0.3 0];
+xx = zeros(2,2);
+yy = zeros(2,2);
+zz = zeros(2,2);
+cmat = zeros(2,2,3);
+for idx = 1:10:Nsamp
+  # rotate and translate from body to world NED
+  q = quaternion(quat(idx,1), quat(idx,2), quat(idx,3), quat(idx,4));
+  q = q * rot2q([1 0 0], pi/2);
+  q = q2runway * q;
+  R = q2rotm(q);
+  for n = 1:2
+    for m = 1:2
+      v = R * (scale * [x(m,n); y(m,n); z(m,n)]);
+      xx(m,n) =  v(2) + xyzr(idx,1);
+      yy(m,n) =  v(1) + xyzr(idx,2);
+      zz(m,n) = -v(3) + xyzr(idx,3);
+      cmat(m,n,:) = colors(idx,:);
+    end
+  end
+  s1 = surf(xx, yy, zz, cmat);
+endfor
+
 # save figure
 savefig("3D", label, mnum, 800, 800);
 
@@ -274,19 +311,19 @@ endif
 fignum
 figure(fignum++, 'position', [100,100,800,800])
 subplot(2,2,1)
-scatterPlot(xyz, 1, 2, sizes, colors, blue, [-350 350])
+scatterPlot(xyzr, 1, 2, sizes, colors, blue, [-350 350])
 title (sprintf("Plan view\n%s", plotTitle))
 xlabel "east (m)"
 ylabel "north (m)"
 
 subplot(2,2,2)
-scatterPlot(xyz, 1, 3, sizes, colors, blue, [-350 350])
+scatterPlot(xyzr, 1, 3, sizes, colors, blue, [-350 350])
 title (sprintf("North elevation"))
 xlabel "east (m)"
 ylabel "alt (m)"
 
 subplot(2,2,3)
-scatterPlot(xyz, 2, 3, sizes, colors, blue, [0 300])
+scatterPlot(xyzr, 2, 3, sizes, colors, blue, [0 300])
 title (sprintf("East elevation"))
 xlabel "north (m)"
 ylabel "alt (m)"
@@ -330,7 +367,7 @@ wuroll = wrap180(uroll, rTol);
 
 figure(fignum++, 'position', [900,100,800,800])
 subplot(2,1,1)
-ax = plotyy(tsp, wuroll, tsp, [pitch mhdg]);
+[ax, h1, h2] = plotyy(tsp, wuroll, tsp, [pitch mhdg]);
 rline = findobj(ax(1),'linestyle','-');
 set(rline,"linestyle",'-');
 set(rline,"marker",'.');
@@ -352,10 +389,7 @@ hold on
 if length(rollErr) > 0
   plot(ax(1), tsp(rollErr), roll(rollErr), '.r');
 endif
-h1 = legend(ax(1), "roll", "rTol");
-h2 = legend(ax(2), "pitch", "hdg");
-legend(h1, "location", "northwest");
-legend(h2, "location", "northeast");
+legend("roll", "rTol", "pitch", "hdg", "location", "northeastoutside");
 
 # plot x axis time hacks
 xoffset = (limits(2)-limits(1))/(length(thacks)*4);
@@ -409,6 +443,9 @@ legend("roll","pitch","yaw")
 
 # save figure
 savefig("RPY", label, mnum, 800, 800);
+
+# save workspace
+save([label ".work"])
 
 endfunction
 
