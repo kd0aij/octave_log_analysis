@@ -91,12 +91,9 @@ for idx = 2:Nsamp
   endif  
 endfor
 
-#TODO: maneuver roll is wrong for rolling circles and spirals
-
 # compute roll/pitch in maneuver plane
 mhdg = zeros(Nsamp, 1);
 mplanes = [];
-##ghdg = rhdg;
 disp(sprintf("Runway heading (CW from North) is %5.1f (East) / %5.1f (West)", 
              rhdg, wrap180(180+rhdg)));
 
@@ -104,43 +101,45 @@ onVertical = 0;
 lowgs = false;
 
 then = time;
+hyst = 1; # total hysteresis of 1 degree and 1 m/sec
 for idx = 1:Nsamp
   # determine maneuver heading based on whether this is a vertical line
-  fq = quaternion(quat(idx,1), quat(idx,2), quat(idx,3), quat(idx,4));
-  epitch = real(rad2deg( asin(2*(fq.w*fq.y - fq.z*fq.x))));
   if onVertical
-    # hysteresis
-    if (abs(epitch) < (pThresh - 0.5)) && (spd(idx) > (minspd + .5))
+    # maneuver heading is current mplane heading
+    mhdg(idx) = mplane.hdg;
+    # check for exit from vertical line
+    if (abs(e_pitch(idx)) < (pThresh - hyst)) && (spd(idx) > (minspd - hyst))
       onVertical = 0;
       # on exit from vertical line
       # use ground heading to define maneuver plane
       disp("exit from vertical line")
+      # set maneuver plane heading to current ground heading
+      mplane.hdg = ghdg(idx);
+      mplane.pos = xyz(idx,:);
+      mplane.entry = false;
+      disp(sprintf("ground heading: %3.0f, maneuver heading %3.0f", ghdg(idx), mplane.hdg));
+      # record ground heading maneuver plane
+      mplanes = setManeuverPlane(tsp(idx), mplanes, mplane, e_pitch(idx), vENU(idx,:), wca(idx));
+      mhdg(idx) = ghdg(idx);
     endif
   else
-    # vertical line if pitch > threshold or groundspeed is low
-    if (abs(epitch) > pThresh) || (spd(idx) < minspd)
+    # maneuver heading is just ground heading
+    mhdg(idx) = ghdg(idx);
+    # entering vertical line if pitch > threshold or groundspeed is low
+    if (abs(e_pitch(idx)) > (pThresh)) || (spd(idx) < (minspd))
       onVertical = 1;
       # on entry to vertical line:
       disp("entry to vertical line")
       # pick aerobatic box heading using previous ground heading
-      mplane.hdg = getManeuverPlane(rhdg, ghdg(idx));
+      mplane.hdg = getManeuverPlane(rhdg, ghdg(idx-1));
       mplane.pos = xyz(idx,:);
+      mplane.entry = true;
+      mhdg(idx) = mplane.hdg;
       disp(sprintf("ground heading: %3.0f, maneuver heading %3.0f", ghdg(idx), mplane.hdg));
       # record vertical maneuver plane
-      mplanes = setManeuverPlane(tsp(idx), mplanes, mplane, epitch, vENU(idx,:), wca(idx));
-##    else
-##      # not on a vertical line, update ground heading
-##      #TODO: this needs to be from the entry heading; it's not reliable on verticals
-##      if spd(idx) > avgspd / 2
-##        ghdg = atan2d(vENU(idx,1),vENU(idx,2));
-##      endif  
+      mplanes = setManeuverPlane(tsp(idx), mplanes, mplane, e_pitch(idx), vENU(idx,:), wca(idx));
     endif  
   endif
-  if onVertical
-    mhdg(idx) = mplane.hdg;
-  else
-    mhdg(idx) = ghdg(idx);
-  end
   # with maneuver plane determined, calculate maneuver roll, pitch and wind correction angle
   [roll(idx) pitch(idx) wca(idx)] = maneuver_roll_pitch(mhdg(idx), quat(idx,:), pThresh);
   # crosswind is ~ |vENU|*sin(wca): so percentage of earthframe velocity is:
@@ -186,23 +185,32 @@ xlabel('East')
 ylabel('North')
 zlabel('Alt')
 
-##TODO: this changes the colormap
-
 # plot maneuver plane: vertical, rotated to maneuver heading
 hold on
 limits=axis();
+x = [0; 0];
+y = [-25; 25];
+#TODO: assign colors to maneuver planes: how to vectorize this?
+cmat = zeros(2,2,3);
 for idx = 1:length(mplanes)
-  x = [0; 0];
-  y = [-50; 25];
   # rotate to heading
   theta = 180 - mplanes(idx).hdg;
-  xyr = [cosd(theta)*x.-sind(theta)*y, sind(theta)*x.+cosd(theta)*y];
+  xyr = [(cosd(theta)*x).-(sind(theta)*y), (sind(theta)*x).+(cosd(theta)*y)];
   # translate to vehicle position
   xyr(:,1:2) += mplanes(idx).pos(1:2);
   [xx yy] = meshgrid(xyr(:,1),xyr(:,2));
   zz = [-25 -25; 25 25] + mplanes(idx).pos(3);
-  s1 = surf(xx, yy', zz); #, 'Edgecolor', 'none');
-  set(s1, 'facealpha', 0.2);
+  # yellow for vertical entry, green for exit
+  if mplanes(idx).entry
+    pcolor = yellow;
+  else
+    pcolor = green;
+  endif
+  for i = 1:3
+    cmat(:,:,i) = pcolor(i);
+  endfor
+  s1 = surf(xx, yy', zz, cmat);
+  set(s1, 'facealpha', 0.1);
 endfor
 
 # plot delta wing planes at intervals

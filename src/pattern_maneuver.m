@@ -4,7 +4,7 @@ function [state data] = pattern_maneuver(mst, dt, istate, rhdg, wind)
   # istate comprises attitude quaternion, NED position (meters) and speed in a structure
   # returned state is NED attitude and position at end of maneuver
   # rhdg is desired ground heading
-  # and wind is a velocity vector in NED? frame 
+  # and wind is a velocity vector in NED frame 
   
   # refactoring: various maneuvers require different parameters:
   # arc needs #degrees of arc and radius but T is dependent on arclength and speed

@@ -73,9 +73,9 @@ mlist = {
   struct('setstate', 'windcomp', 'on', 1);
   struct('setstate', 'position', 'x', pos(1), 'y', pos(2), 'z', pos(3));
 
-  # rolling spiral
-  struct('setstate', 'attitude', 'roll', 0, 'pitch',  20, 'yaw', rhdg);
-  struct('maneuver', 'circle', 'radius', 50, 'arc', -360, 'roll', -360);
+##  # rolling spiral
+##  struct('setstate', 'attitude', 'roll', 0, 'pitch',  20, 'yaw', rhdg);
+##  struct('maneuver', 'circle', 'radius', 50, 'arc', -360, 'roll', -360);
 
   # straight, level, rolling entry
   struct('setstate', 'attitude', 'roll', 0, 'pitch',  0, 'yaw', rhdg);
@@ -87,14 +87,19 @@ mlist = {
   struct('maneuver', 'roll', 'T', 1, 'arc', -90);
   # 1/4 outside loop
   struct('maneuver', 'arc', 'radius', 50, 'arc', -90, 'roll', 0);
-  # rolling half circle
-  struct('maneuver', 'circle', 'radius', 50, 'arc', -180, 'roll', -360);
+  # rolling quarter circle
+  struct('maneuver', 'circle', 'radius', 50, 'arc', -90, 'roll', -180);
+  # rolling quarter circle
+  struct('maneuver', 'circle', 'radius', 50, 'arc', -90, 'roll', 180);
   # straight, level exit
   struct('maneuver', 'line', 'T', 3);
-  
+
+  # 1/4 outside loop, roll to right KE
   struct('maneuver', 'arc', 'radius', 50, 'arc', -90, 'roll', 90);
-  struct('maneuver', 'arc', 'radius', 50, 'arc', -180, 'roll', -180);
-  struct('maneuver', 'line', 'T', 3);
+  # 1/2 inverted outside loop
+  struct('maneuver', 'arc', 'radius', 50, 'arc', -180, 'roll', 0);
+  # left rolling vertical
+  struct('maneuver', 'roll', 'T', 3, 'arc', -180);
 };
 
 then = time;
