@@ -72,10 +72,31 @@ yaw = hdg2yaw(hdg);
 e_roll = data(startIndex:endIndex,5);
 e_pitch = data(startIndex:endIndex,6);
 
+# calculate average speed
+spd = zeros(Nsamp, 1);
+for idx = 1:Nsamp
+  spd(idx) = norm(vENU(idx, 1:2));
+endfor
+avgspd = mean(spd);
+
+# calculate ground heading qualified by a minimum groundspeed
+ghdg = zeros(Nsamp, 1);
+ghdg(1) = rhdg;
+minspd = 0.25 * avgspd
+for idx = 2:Nsamp
+  if spd(idx) > minspd
+    ghdg(idx) = atan2d(vENU(idx,1),vENU(idx,2));
+  else
+    ghdg(idx) = ghdg(idx-1);
+  endif  
+endfor
+
+#TODO: maneuver roll is wrong for rolling circles and spirals
+
 # compute roll/pitch in maneuver plane
 mhdg = zeros(Nsamp, 1);
 mplanes = [];
-ghdg = rhdg;
+##ghdg = rhdg;
 disp(sprintf("Runway heading (CW from North) is %5.1f (East) / %5.1f (West)", 
              rhdg, wrap180(180+rhdg)));
 
@@ -89,7 +110,7 @@ for idx = 1:Nsamp
   epitch = real(rad2deg( asin(2*(fq.w*fq.y - fq.z*fq.x))));
   if onVertical
     # hysteresis
-    if (abs(epitch) < (pThresh - 0.5)) && ((norm([vENU(idx,1), vENU(idx,2)]) > 2.5))
+    if (abs(epitch) < (pThresh - 0.5)) && (spd(idx) > (minspd + .5))
       onVertical = 0;
       # on exit from vertical line
       # use ground heading to define maneuver plane
@@ -97,26 +118,28 @@ for idx = 1:Nsamp
     endif
   else
     # vertical line if pitch > threshold or groundspeed is low
-    if (abs(epitch) > pThresh) || (norm([vENU(idx,1), vENU(idx,2)]) < 2)
+    if (abs(epitch) > pThresh) || (spd(idx) < minspd)
       onVertical = 1;
       # on entry to vertical line:
       disp("entry to vertical line")
       # pick aerobatic box heading using previous ground heading
-      mplane.hdg = getManeuverPlane(rhdg, ghdg);
+      mplane.hdg = getManeuverPlane(rhdg, ghdg(idx));
       mplane.pos = xyz(idx,:);
-      disp(sprintf("maneuver heading %3.0f", mplane.hdg));
+      disp(sprintf("ground heading: %3.0f, maneuver heading %3.0f", ghdg(idx), mplane.hdg));
       # record vertical maneuver plane
       mplanes = setManeuverPlane(tsp(idx), mplanes, mplane, epitch, vENU(idx,:), wca(idx));
-    else
-      # not on a vertical line, update ground heading
-      #TODO: this needs to be from the entry heading; it's not reliable on verticals
-      ghdg = atan2d(vENU(idx,1),vENU(idx,2));
+##    else
+##      # not on a vertical line, update ground heading
+##      #TODO: this needs to be from the entry heading; it's not reliable on verticals
+##      if spd(idx) > avgspd / 2
+##        ghdg = atan2d(vENU(idx,1),vENU(idx,2));
+##      endif  
     endif  
   endif
   if onVertical
     mhdg(idx) = mplane.hdg;
   else
-    mhdg(idx) = ghdg;
+    mhdg(idx) = ghdg(idx);
   end
   # with maneuver plane determined, calculate maneuver roll, pitch and wind correction angle
   [roll(idx) pitch(idx) wca(idx)] = maneuver_roll_pitch(mhdg(idx), quat(idx,:), pThresh);
@@ -134,21 +157,16 @@ blue = hsv2rgb([.60,1,1]);
 magenta = [1,0,1];
 rollErr = [];
 
+# rainbow colormap for cindex
 for idx = 1:length(colors)
-  if rollCheck(roll(idx), e_roll(idx), 0, rTol) #abs(roll(idx)) < rTol
+  if abs(roll(idx)) < rTol
     # level
     colors(idx,:) = green;
-  elseif rollCheck(roll(idx), e_roll(idx), -180, rTol) #abs(roll(idx)-180) < rTol
+  elseif abs(abs(roll(idx))-180) < rTol
     # inverted
-    colors(idx,:) = greeni;
-  elseif rollCheck(roll(idx), e_roll(idx), 180, rTol) #abs(roll(idx)+180) < rTol
-    # inverted
-    colors(idx,:) = greeni;
-  elseif rollCheck(roll(idx), e_roll(idx), -90, rTol) #abs(roll(idx)-90) < rTol
-    # right knife edge
-    colors(idx,:) = yellow;
-  elseif rollCheck(roll(idx), e_roll(idx), 90, rTol) #abs(roll(idx)+90) < rTol
-    # left knife edge
+    colors(idx,:) = blue;
+  elseif abs(abs(roll(idx))-90) < rTol
+    # knife edge
     colors(idx,:) = yellow;
   else
     colors(idx,:) = red;
@@ -159,15 +177,16 @@ sizes = 4 * ones(length(colors),1);
 
 fignum = mnum * 10;
 figure(fignum++)
-##axes('Projection','orthographic')
 scatter3(xyz(:,1), xyz(:,2), xyz(:,3), 8, colors);
 axis equal
 grid on
 rotate3d on
-title('xyz')
+title('ENU xyz')
 xlabel('East')
-ylabel('True North')
+ylabel('North')
 zlabel('Alt')
+
+##TODO: this changes the colormap
 
 # plot maneuver plane: vertical, rotated to maneuver heading
 hold on
@@ -186,33 +205,38 @@ for idx = 1:length(mplanes)
   set(s1, 'facealpha', 0.2);
 endfor
 
-# plot wing planes at intervals
+# plot delta wing planes at intervals
 hold on
 scale = 10;
-wx = [-.1; .1];
-wy = [-1; 1];
-xx = zeros(2,2);
-yy = zeros(2,2);
-zz = zeros(2,2);
+gN = 3;
+# 6 xy grid points at [-.1, -1] [.1, -1] [.3, 0] [.1 1] [-.1 1] [-.1 0]
+wx = [-.1 -.1 -.1;
+      .1   .3  .1];
+wy = [-1 0 1;
+      -1 0 1];
+xx = zeros(2,3);
+yy = zeros(2,3);
+zz = zeros(2,3);
+cmat = zeros(2,3,3);
 for idx = 1:10:Nsamp
   # rotate and translate from body to world NED
   q = quaternion(quat(idx,1), quat(idx,2), quat(idx,3), quat(idx,4));
   R = q2rotm(q);
-  for n = 1:2
+  for n = 1:3
     for m = 1:2
-      v = R * (scale * [wx(n); wy(m); 0]);
+      v = R * (scale * [wx(m,n); wy(m,n); 0]);
       xx(m,n) =  v(2) + xyz(idx,1);
       yy(m,n) =  v(1) + xyz(idx,2);
       zz(m,n) = -v(3) + xyz(idx,3);
+      cmat(m,n,:) = colors(idx,:);
     end
   end
-  s1 = surf(xx, yy, zz);
-  set(s1, 'facealpha', 0.2);
+  s1 = surf(xx, yy, zz, cmat);
 endfor
 # save figure
 savefig("3D", label, mnum, 800, 800);
 
-##return
+return
 
 figure(fignum++, 'position', [400,50,1080,400])
 hold on
@@ -421,11 +445,12 @@ function mhdg = getManeuverPlane(rhdg, ghdg)
       # calculate maneuver plane
       # constrain hdg to box or cross-box
       # cross-box heading
+      revhdg = wrap180(rhdg+180);
       chdg = wrap180(rhdg+90);
       if abs(ghdg-rhdg) < 45
         mhdg = rhdg;
-      elseif abs(wrap180(ghdg-rhdg)) < 45
-        mhdg = wrap180(180+rhdg);
+      elseif abs(ghdg - revhdg) < 45
+        mhdg = revhdg;
       elseif abs(ghdg-chdg) < 45
         mhdg = chdg;
       else  

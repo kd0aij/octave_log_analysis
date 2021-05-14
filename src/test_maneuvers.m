@@ -46,7 +46,7 @@ rhdg  = 90;
 r2runway = rotv([0 0 1], deg2rad(90-rhdg));
 
 # m/sec in NED earth frame
-wind = [5 0 0]; 
+wind = [0 5 0]; 
 
 # straight line entry
 # center of box (150m in front of pilot), 50m AGL
@@ -93,7 +93,7 @@ mlist = {
   struct('maneuver', 'line', 'T', 3);
   
   struct('maneuver', 'arc', 'radius', 50, 'arc', -90, 'roll', 90);
-  struct('maneuver', 'arc', 'radius', 50, 'arc', -90, 'roll', -90);
+  struct('maneuver', 'arc', 'radius', 50, 'arc', -180, 'roll', -180);
   struct('maneuver', 'line', 'T', 3);
 };
 
