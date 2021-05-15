@@ -118,7 +118,7 @@ for idx = 2:Nsamp
       mplane.hdg = ghdg(idx) - r2box;
       mplane.pos = xyzr(idx,:);
       mplane.entry = false;
-      disp(sprintf("ground heading: %3.0f, maneuver heading %3.0f", ghdg(idx), mplane.hdg));
+      disp(sprintf("rotated maneuver heading %3.0f", mplane.hdg));
       # record ground heading maneuver plane
       mplanes = setManeuverPlane(tsp(idx), mplanes, mplane, e_pitch(idx), vENU(idx,:), wca(idx));
       mhdg(idx) = ghdg(idx);
@@ -136,13 +136,13 @@ for idx = 2:Nsamp
       mplane.pos = xyzr(idx,:);
       mplane.entry = true;
       mhdg(idx) = mplane.hdg;
-      disp(sprintf("ground heading: %3.0f, maneuver heading %3.0f", ghdg(idx), mplane.hdg));
+      disp(sprintf("rotated maneuver heading %3.0f", mplane.hdg));
       # record vertical maneuver plane
       mplanes = setManeuverPlane(tsp(idx), mplanes, mplane, e_pitch(idx), vENU(idx,:), wca(idx));
     endif  
   endif
   # with maneuver plane determined, calculate maneuver roll, pitch and wind correction angle
-  [roll(idx) pitch(idx) wca(idx)] = maneuver_roll_pitch(mhdg(idx), quat(idx,:), pThresh);
+  [roll(idx) pitch(idx) wca(idx)] = maneuver_roll_pitch(mhdg(idx)+r2box, quat(idx,:), pThresh);
   # crosswind is ~ |vENU|*sin(wca): so percentage of earthframe velocity is:
   xwnd(idx) = 100 * abs(sind(wca(idx)));
 endfor
@@ -281,7 +281,7 @@ endfor
 # save figure
 savefig("3D", label, mnum, 800, 800);
 
-return
+##return
 
 figure(fignum++, 'position', [400,50,1080,400])
 hold on
