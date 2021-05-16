@@ -1,6 +1,6 @@
 function plot_maneuver_rotated(startTime, endTime, data,
   mnum=0, label='untitled', origin=[39.8420194 -105.2123333 1808], 
-  rTol=15, posIndex=2, rhdg=106, whichplots=[0 1 2 3], pThresh=88, plotTitle='')
+  rTol=15, posIndex=2, rhdg=106, whichplots=[0 1 2 3], pThresh=80, plotTitle='')
   
 # rhdg is runway heading: 0 is North, 90 is East
 # latitude is converted to Y axis in meters
@@ -83,7 +83,7 @@ avgspd = mean(spd);
 # calculate ground heading qualified by a minimum groundspeed
 ghdg = zeros(Nsamp, 1);
 ghdg(1) = rhdg;
-minspd = 0.75 * avgspd
+minspd = 10;
 for idx = 2:Nsamp
   if spd(idx) > minspd
     ghdg(idx) = atan2d(vENU(idx,1),vENU(idx,2));
@@ -141,13 +141,12 @@ for idx = 2:Nsamp
       mplanes = setManeuverPlane(tsp(idx), mplanes, mplane, e_pitch(idx), vENU(idx,:), wca(idx));
     endif  
   endif
-  # with maneuver plane determined, calculate maneuver roll, pitch and wind correction angle
-  [roll(idx) pitch(idx) wca(idx)] = maneuver_roll_pitch(mhdg(idx), quat(idx,:), pThresh);
-  if abs(wca) > 12
-    disp(sprintf("large wca: %5.1f", wca));
-  endif
-  # crosswind is ~ |vENU|*sin(wca): so percentage of earthframe velocity is:
-  xwnd(idx) = 100 * abs(sind(wca(idx)));
+    [roll(idx) pitch(idx) wca(idx)] = maneuver_roll_pitch(mhdg(idx), quat(idx,:), pThresh);
+    if abs(wca(idx)) > 12
+      disp(sprintf("large wca: %5.1f", wca(idx)));
+    endif
+    # crosswind is ~ |vENU|*sin(wca): so percentage of earthframe velocity is:
+    xwnd(idx) = 100 * abs(sind(wca(idx)));
 endfor
 disp(sprintf("maneuver_roll_pitch elapsed time: %f", time-then));
 
@@ -289,11 +288,14 @@ endif
 if any(whichplots == 1)
   figure(fignum+1, 'position', [400,50,1080,400])
   hold on
-  plot(tsp,  yaw, 'og', tsp, e_pitch, 'ob',tsp, wrap180(unwrapd(e_roll), rTol), 'oc')
-  plot(tsp, mhdg, '*-m', tsp, pitch, '*-k', tsp, wrap180(unwrapd(roll), rTol), '*-r')
+  plot(tsp,  yaw, 'og', "markersize", 3,
+  tsp, e_pitch, 'ob', "markersize", 3,
+  tsp, wrap180(unwrapd(e_roll), rTol), 'oc', "markersize", 3)
+  plot(tsp, mhdg, '-m', tsp, pitch, '-k', tsp, wrap180(unwrapd(roll), rTol), '-r')
   plot(tsp, xwnd, '-k')
   title('Euler RPY vs. maneuver RPY')
-  legend(['eyaw'; 'epitch'; 'eroll'; 'mhdg'; 'pitch'; 'roll'; 'xwnd %'])
+  legend(['eyaw'; 'epitch'; 'eroll'; 'mhdg'; 'pitch'; 'roll'; 'xwnd %'],
+         "location","northeastoutside")
   axis tight
   grid minor
   # save figure
@@ -317,19 +319,19 @@ if any(whichplots == 2)
 
   figure(fignum+2, 'position', [100,100,1600,800])
   subplot(2,2,1)
-  scatterPlot(xyzr, 1, 2, sizes, colors, blue, [-350 350])
+  scatterPlot(xyzr, 1, 2, sizes, colors, blue, [-350 350 0 250])
   title (sprintf("Plan view\n%s", plotTitle))
   xlabel "east (m)"
   ylabel "north (m)"
 
   subplot(2,2,2)
-  scatterPlot(xyzr, 1, 3, sizes, colors, blue, [-350 350])
+  scatterPlot(xyzr, 1, 3, sizes, colors, blue, [-350 350 0 400])
   title (sprintf("North elevation"))
   xlabel "east (m)"
   ylabel "alt (m)"
 
   subplot(2,2,3)
-  scatterPlot(xyzr, 2, 3, sizes, colors, blue, [0 300])
+  scatterPlot(xyzr, 2, 3, sizes, colors, blue, [0 300 0 400])
   title (sprintf("East elevation"))
   xlabel "north (m)"
   ylabel "alt (m)"
@@ -373,7 +375,7 @@ if any(whichplots == 3)
   uroll = unwrapd(roll);
   wuroll = wrap180(uroll, rTol);
 
-  figure(fignum++, 'position', [900,100,800,800])
+  figure(fignum+3, 'position', [900,100,800,800])
   subplot(2,1,1)
   [ax, h1, h2] = plotyy(tsp, wuroll, tsp, [pitch mhdg]);
   limits=axis();
@@ -448,7 +450,7 @@ if any(whichplots == 3)
   title ("roll, pitch, yaw rates")
   xlabel "time"
   ylabel "deg/sec)"
-  legend("roll","pitch","yaw")
+  legend("roll","pitch","yaw","location","northeastoutside")
 
   # save figure
   savefig("RPY", label, mnum, 800, 800);
