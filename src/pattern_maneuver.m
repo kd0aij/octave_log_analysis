@@ -43,11 +43,20 @@ function [state data] = pattern_maneuver(mst, dt, istate, rhdg, wind)
     
     # inside loop has a positive arc, outside loop has a negative arc
     # inputs: arc, radius, roll
+    # TODO: need to fix compensation for headwind/tailwind component
+    #       This is overshooting the correct endpoint for the arc with a tailwind.
+    #       Might be as simple as calculating the delta speed due to wind?
     case 'arc'
      
       arclen = mst.radius * deg2rad(abs(mst.arc));
       [quatc s_factor] = wind_correctionE(state, wind);
+      
+##      # wind corrected speed
+##      # perhaps the effective speed is altered by wind dot hdg
+##      hdg = hamilton_product(state.quat, [0 0 -1]);
+##      spd = state.spd - dot(wind, hdg);
       T = round(arclen / state.spd / dt) * dt;
+      T *= state.spd / (state.spd + vectorNorm(wind));
 
       Nsamp = round(T / dt);
       data = zeros(Nsamp, 29);
@@ -56,11 +65,11 @@ function [state data] = pattern_maneuver(mst, dt, istate, rhdg, wind)
       # project body-frame -Z axis to arc center
       ctr = mst.radius * hamilton_product(state.quat, [0 0 -1]) + state.pos;
       
-      
-      # speed spd in m/sec
       # gy in rad/sec (pitch rate)
       gy = deg2rad(mst.arc) / T;
       dtheta = deg2rad(mst.arc) / Nsamp;
+      # alter dtheta by the ratio of ground speed to airspeed
+      dtheta *= s_factor;
       
       # for a rolling loop, pitch must be performed in earth frame
       # axis of rotation is initial body Y in earth frame
@@ -97,7 +106,7 @@ function [state data] = pattern_maneuver(mst, dt, istate, rhdg, wind)
  
         # required for wind_correctionE
         [quatc s_factor] = wind_correctionE(state, wind);
-        dquat = rot2q(by, dtheta/s_factor);
+        dquat = rot2q(by, dtheta * s_factor);
 ##        dquat = rot2q([0 1 0], dtheta/s_factor);
         
 ##        [roll pitch yaw] = quat2euler(state.quat);
@@ -121,7 +130,8 @@ function [state data] = pattern_maneuver(mst, dt, istate, rhdg, wind)
      
       arclen = mst.radius * deg2rad(abs(mst.arc));
       [quatc s_factor] = wind_correctionE(state, wind);
-      T = round(arclen / (s_factor*state.spd) / dt) * dt;
+##      T = round(arclen / (s_factor*state.spd) / dt) * dt;
+      T = round(arclen / (state.spd) / dt) * dt;
 
       Nsamp = round(T / dt);
       data = []; #zeros(Nsamp, 29);
@@ -171,7 +181,7 @@ function [state data] = pattern_maneuver(mst, dt, istate, rhdg, wind)
         
         # required for wind_correctionE
         [quatc s_factor] = wind_correctionE(state, wind);
-        dquat = rot2q([0 0 1], dtheta/s_factor);
+        dquat = rot2q([0 0 1], dtheta / s_factor);
         
         dthetar = rthetaRatio * dtheta / s_factor;
         dquatr = rot2q([1 0 0], dthetar);
@@ -186,7 +196,7 @@ function [state data] = pattern_maneuver(mst, dt, istate, rhdg, wind)
     # straight line with current attitude
     # inputs: T
     case 'line'
-      Nsamp = mst.T / dt;
+      Nsamp = round(mst.T / dt);
       data = zeros(Nsamp, 29);
 
       gx = 0;
@@ -206,7 +216,7 @@ function [state data] = pattern_maneuver(mst, dt, istate, rhdg, wind)
     # straight line roll through degrees specified by arc
     # inputs: T, arc
     case 'roll'
-      Nsamp = mst.T / dt;
+      Nsamp = round(mst.T / dt);
       data = zeros(Nsamp, 29);
 
       quatc = wind_correctionE(state, wind);

@@ -33,7 +33,7 @@ dt = 1 / 25;
 res = [];
 
 state.origin = [39.8420194 -105.2123333 1808];
-state.pThresh = 88;
+state.pThresh = 45;
 state.noise = 0; # degrees, meters
 state.windcomp = 1;
 
@@ -46,7 +46,7 @@ rhdg  = 90;
 r2runway = rotv([0 0 1], deg2rad(90-rhdg));
 
 # m/sec in NED earth frame
-wind = [0 5 0]; 
+wind = [5 0 0]; 
 
 # straight line entry
 # center of box (150m in front of pilot), 50m AGL
@@ -55,10 +55,10 @@ pos = [150 0 -50];
 
 # end first arc at center of box (150m in front of pilot)
 state.spd = 30;
-T = 3;
-radius = 50;
-pos(2) = -state.spd * T - radius;
-pos = (r2runway * pos')';
+##T = 3;
+##radius = 50;
+##pos(2) = -state.spd * T - radius;
+##pos = (r2runway * pos')';
 
 
 # state comprises Euler RPY, ECEF position and speed
@@ -69,40 +69,57 @@ pos = (r2runway * pos')';
 ##state.quat = euler2quat(roll, pitch, rhdg);
 
 # list of maneuvers
-mlist = {
+insideloop = {
   struct('setstate', 'windcomp', 'on', 1);
   struct('setstate', 'position', 'x', pos(1), 'y', pos(2), 'z', pos(3));
+  struct('setstate', 'attitude', 'roll', 0, 'pitch',  0, 'yaw', rhdg);
+  # inside loop
+  struct('maneuver', 'arc', 'radius', 50, 'arc', 360, 'roll', 0);
+};
 
+rollinginsideloop = {
+  struct('setstate', 'windcomp', 'on', 1);
+  struct('setstate', 'position', 'x', pos(1), 'y', pos(2), 'z', pos(3));
+  struct('setstate', 'attitude', 'roll', 0, 'pitch',  0, 'yaw', rhdg);
+  # inside loop
+  struct('maneuver', 'arc', 'radius', 50, 'arc', 360, 'roll', 720);
+};
+
+##mlist = {
+##  struct('setstate', 'windcomp', 'on', 1);
+##  struct('setstate', 'position', 'x', pos(1), 'y', pos(2), 'z', pos(3));
+##
 ##  # rolling spiral
-##  struct('setstate', 'attitude', 'roll', 0, 'pitch',  20, 'yaw', rhdg);
+##  struct('setstate', 'attitude', 'roll', 0, 'pitch',  0, 'yaw', rhdg);
 ##  struct('maneuver', 'circle', 'radius', 50, 'arc', -360, 'roll', -360);
 ##
-  # straight, level, rolling entry
-  struct('setstate', 'attitude', 'roll', 0, 'pitch',  0, 'yaw', rhdg);
-  struct('maneuver', 'roll', 'T', 3, 'arc', 360);
-  # 1/4 inside loop, roll to right KE, vertical, roll left to upright
-  struct('maneuver', 'arc', 'radius', 50, 'arc', 90, 'roll', 0);
-  struct('maneuver', 'roll', 'T', 1, 'arc', 90);
-  struct('maneuver', 'line', 'T', 1);
-  struct('maneuver', 'roll', 'T', 1, 'arc', -90);
-  # 1/4 outside loop
-  struct('maneuver', 'arc', 'radius', 50, 'arc', -90, 'roll', 0);
-##  # rolling quarter circle
-##  struct('maneuver', 'circle', 'radius', 50, 'arc', -90, 'roll', -180);
-##  # rolling quarter circle
-##  struct('maneuver', 'circle', 'radius', 50, 'arc', -90, 'roll', 180);
+##  # straight, level, rolling entry
+##  struct('setstate', 'attitude', 'roll', 0, 'pitch',  0, 'yaw', rhdg);
+##  struct('maneuver', 'roll', 'T', 50.0/state.spd, 'arc', 360);
+##  # 1/4 inside loop, roll to right KE, vertical, roll left to upright
+##  struct('maneuver', 'arc', 'radius', 50, 'arc', 90, 'roll', 0);
+##  struct('maneuver', 'roll', 'T', 50.0/state.spd, 'arc', 180);
+##  struct('maneuver', 'line', 'T', 50.0/state.spd);
+####  struct('maneuver', 'roll', 'T', 50.0/state.spd, 'arc', -90);
+##  # 1/4 outside loop
+##  struct('maneuver', 'arc', 'radius', 50, 'arc', -90, 'roll', 0);
+##  # not rolling quarter circle
+##  struct('maneuver', 'circle', 'radius', 50, 'arc', -90, 'roll', 0);
+##  # not rolling quarter circle
+##  struct('maneuver', 'circle', 'radius', 50, 'arc', -90, 'roll', 0);
 ##  # straight, level exit
-##  struct('maneuver', 'line', 'T', 3);
+##  struct('maneuver', 'line', 'T', 50.0/state.spd);
 ##
 ##  # 1/4 outside loop, roll to right KE
 ##  struct('maneuver', 'arc', 'radius', 50, 'arc', -90, 'roll', 90);
 ##  # 1/2 inverted outside loop
 ##  struct('maneuver', 'arc', 'radius', 50, 'arc', -180, 'roll', 0);
 ##  # left rolling vertical
-##  struct('maneuver', 'roll', 'T', 3, 'arc', -180);
-};
+##  struct('maneuver', 'roll', 'T', 50.0/state.spd, 'arc', -180);
+##};
 
 then = time;
+mlist = rollinginsideloop;
 
 for idx = 1:length(mlist)
   item = mlist{idx};
@@ -138,38 +155,6 @@ for idx = 1:length(mlist)
   endswitch
 endfor
 
-##figure(7, 'position', [20, 100, 800, 800])
-##xyzr = res(:,27:29);
-##Nsamp = size(xyzr)(1);
-##plot3Dline(xyzr, 'o');
-##axis equal
-### plot wing planes at intervals
-##hold on
-##quat = res(:,17:20);
-##[wx, wy, wz] = ellipsoid(0, 0, 0, 0.1, 10, 0.01);
-##for idx = 1:10:Nsamp
-##  # rotate and translate from body to world
-##  R = q2rotm(quat(idx,:));
-##  [rx, ry, rz] = rellips(R, wx, wy, wz, xyzr(idx,:));
-##  s1 = surf(rx, ry, rz);
-##  set(s1,'facealpha',0.2);
-##endfor
-##grid on
-##rotate3d on
-##title('full')
-##xlabel('East')
-##ylabel('North')
-##zlabel('Alt')
-
-### find heading by fitting a line to xy data
-##X = [ones(length(data),1) data(:,27)];
-##[beta sigma] = ols(data(:,28), X)
-##ehdg = atan2d(beta(2),1);
-##figure(8)
-##plot(data(:,27),data(:,28),data(:,27),beta(1)+beta(2)*data(:,27),'o')
-##axis equal
-##title(sprintf("heading: %5.1f, sigma: %5.1f", ehdg, sigma))
-
 # add timestamp column
 Nsamp = length(res);
 pts = [0:dt:(Nsamp-1)*dt];
@@ -189,7 +174,8 @@ fflush (stdout);
 ##  plot_maneuver(0, (Nsamp-1)*dt, res, 77, 'test_maneuvers',
 ##                           state.origin, rollTolerance, 2, rhdg=rhdg, state.pThresh, plot_title);
   plot_maneuver_rotated(0, (Nsamp-1)*dt, res, 77, 'test_maneuvers',
-                           state.origin, rollTolerance, 2, rhdg=rhdg, state.pThresh, plot_title);
+                           state.origin, rollTolerance, 2, rhdg=rhdg, 
+                           whichplots=[0 1 2], state.pThresh, plot_title);
 ##endif
 
 endfunction

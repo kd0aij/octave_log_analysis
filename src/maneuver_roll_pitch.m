@@ -17,14 +17,6 @@ function [roll pitch wca wca_axis] = maneuver_roll_pitch(rhdg, quat, pThresh)
   # this hzplane requires maneuvers to lie in a vertical plane
   hzplane = [-sind(rhdg) cosd(rhdg) 0];
   
-##  # reverse heading if necessary
-##  bxdothz = dot(bx, hzplane);
-##  if bxdothz < -.001
-##    rhdg = wrap180(rhdg+180);
-##    hzplane = [-sind(rhdg) cosd(rhdg) 0];
-##    bxdothz = dot(bx, hzplane);
-##  end
-
   # the wind correction angle (WCA) relative to flight path is the
   # angle between body frame x and hzplane
   # This should be independent of roll and pitch: roll does not affect the direction
@@ -40,11 +32,14 @@ function [roll pitch wca wca_axis] = maneuver_roll_pitch(rhdg, quat, pThresh)
   fq = unit(r2hzp * quat);
   
   # calculate Euler pitch in maneuver plane
-  pitch = real(rad2deg( asin(2*(fq.w*fq.y - fq.z*fq.x))));
-  rolle  = rad2deg(atan2(2*(fq.w*fq.x + fq.y*fq.z), 1 - 2*(fq.x*fq.x + fq.y*fq.y)));
-  [roll pitch yaw] = quat2euler(fq);
+  [eroll pitch eyaw] = quat2euler(fq);
   
   # back out rhdg and pitch
+  if (abs(eyaw-rhdg) > 10)
+    if (abs(eyaw-wrap180(rhdg+180)) < 10)
+      rhdg = wrap180(rhdg + 180);
+    end
+  end
   ryaw = rot2q([0 0 1], deg2rad(-rhdg));
   rpitch = rot2q([0 1 0], deg2rad(-pitch));
   

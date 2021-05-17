@@ -83,7 +83,7 @@ avgspd = mean(spd);
 # calculate ground heading qualified by a minimum groundspeed
 ghdg = zeros(Nsamp, 1);
 ghdg(1) = rhdg;
-minspd = 10;
+minspd = 2;
 for idx = 2:Nsamp
   if spd(idx) > minspd
     ghdg(idx) = atan2d(vENU(idx,1),vENU(idx,2));
@@ -109,7 +109,7 @@ for idx = 2:Nsamp
     # maneuver heading is current mplane heading
     mhdg(idx) = mplane.hdg;
     # check for exit from vertical line
-    if (abs(e_pitch(idx)) < (pThresh - hyst)) && (spd(idx) > (minspd + hyst))
+    if (abs(e_pitch(idx)) < (pThresh - hyst)) #&& (spd(idx) > (minspd + hyst))
       onVertical = 0;
       # on exit from vertical line
       # use ground heading to define maneuver plane
@@ -127,7 +127,7 @@ for idx = 2:Nsamp
     # maneuver heading is just ground heading
     mhdg(idx) = ghdg(idx);
     # entering vertical line if pitch > threshold or groundspeed is low
-    if (abs(e_pitch(idx)) > (pThresh)) || (spd(idx) < (minspd))
+    if (abs(e_pitch(idx)) > (pThresh)) #|| (spd(idx) < (minspd))
       onVertical = 1;
       # on entry to vertical line:
       disp("entry to vertical line")
@@ -180,6 +180,7 @@ sizes = 4 * ones(length(colors),1);
 fignum = mnum * 10;
 if any(whichplots == 0)
   figure(fignum, 'position', [900,100,800,800])
+  clf
   scatter3(xyzr(:,1), xyzr(:,2), xyzr(:,3), 8, colors);
   axis equal
   grid on
@@ -287,6 +288,7 @@ endif
 
 if any(whichplots == 1)
   figure(fignum+1, 'position', [400,50,1080,400])
+  clf
   hold on
   plot(tsp,  yaw, 'og', "markersize", 3,
   tsp, e_pitch, 'ob', "markersize", 3,
@@ -318,6 +320,7 @@ if any(whichplots == 2)
   endif
 
   figure(fignum+2, 'position', [100,100,1600,800])
+  clf
   subplot(2,2,1)
   scatterPlot(xyzr, 1, 2, sizes, colors, blue, [-350 350 0 250])
   title (sprintf("Plan view\n%s", plotTitle))
@@ -376,6 +379,7 @@ if any(whichplots == 3)
   wuroll = wrap180(uroll, rTol);
 
   figure(fignum+3, 'position', [900,100,800,800])
+  clf
   subplot(2,1,1)
   [ax, h1, h2] = plotyy(tsp, wuroll, tsp, [pitch mhdg]);
   limits=axis();
