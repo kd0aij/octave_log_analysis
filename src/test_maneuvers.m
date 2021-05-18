@@ -46,7 +46,9 @@ rhdg  = 90;
 r2runway = rotv([0 0 1], deg2rad(90-rhdg));
 
 # m/sec in NED earth frame
-wind = [5 0 0]; 
+wind = [0 0 0]; 
+
+label = "w0"
 
 # straight line entry
 # center of box (150m in front of pilot), 50m AGL
@@ -82,7 +84,7 @@ rollinginsideloop = {
   struct('setstate', 'position', 'x', pos(1), 'y', pos(2), 'z', pos(3));
   struct('setstate', 'attitude', 'roll', 0, 'pitch',  0, 'yaw', rhdg);
   # inside loop
-  struct('maneuver', 'arc', 'radius', 50, 'arc', 360, 'roll', 720);
+  struct('maneuver', 'arc', 'radius', 50, 'arc', 360, 'roll', 360);
 };
 
 ##mlist = {
@@ -173,9 +175,9 @@ fflush (stdout);
                        rollTolerance, yawCor);
 ##  plot_maneuver(0, (Nsamp-1)*dt, res, 77, 'test_maneuvers',
 ##                           state.origin, rollTolerance, 2, rhdg=rhdg, state.pThresh, plot_title);
-  plot_maneuver_rotated(0, (Nsamp-1)*dt, res, 77, 'test_maneuvers',
+  plot_maneuver_rotated(0, (Nsamp-1)*dt, res, 1, label,
                            state.origin, rollTolerance, 2, rhdg=rhdg, 
-                           whichplots=[0 1 2], state.pThresh, plot_title);
+                           whichplots=[0 1 2 3], state.pThresh, plot_title);
 ##endif
 
 endfunction

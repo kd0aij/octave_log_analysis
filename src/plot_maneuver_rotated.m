@@ -1,6 +1,7 @@
 function plot_maneuver_rotated(startTime, endTime, data,
   mnum=0, label='untitled', origin=[39.8420194 -105.2123333 1808], 
-  rTol=15, posIndex=2, rhdg=106, whichplots=[0 1 2 3], pThresh=80, plotTitle='')
+  rTol=15, posIndex=2, rhdg=106, whichplots=[0 1 2 3], pThresh=80, plotTitle='',
+  plotMplanes=false)
   
 # rhdg is runway heading: 0 is North, 90 is East
 # latitude is converted to Y axis in meters
@@ -109,7 +110,7 @@ for idx = 2:Nsamp
     # maneuver heading is current mplane heading
     mhdg(idx) = mplane.hdg;
     # check for exit from vertical line
-    if (abs(e_pitch(idx)) < (pThresh - hyst)) #&& (spd(idx) > (minspd + hyst))
+    if (abs(e_pitch(idx)) < (pThresh - hyst))
       onVertical = 0;
       # on exit from vertical line
       # use ground heading to define maneuver plane
@@ -127,7 +128,7 @@ for idx = 2:Nsamp
     # maneuver heading is just ground heading
     mhdg(idx) = ghdg(idx);
     # entering vertical line if pitch > threshold or groundspeed is low
-    if (abs(e_pitch(idx)) > (pThresh)) #|| (spd(idx) < (minspd))
+    if (abs(e_pitch(idx)) > (pThresh))
       onVertical = 1;
       # on entry to vertical line:
       disp("entry to vertical line")
@@ -159,7 +160,6 @@ blue = hsv2rgb([.60,1,1]);
 magenta = [1,0,1];
 rollErr = [];
 
-# rainbow colormap for cindex
 for idx = 1:length(colors)
   if abs(roll(idx)) < rTol
     # level
@@ -190,35 +190,37 @@ if any(whichplots == 0)
   ylabel('North')
   zlabel('Alt')
 
-  # plot maneuver plane: vertical, rotated to maneuver heading
-  hold on
-  limits=axis();
-  x = [0; 0];
-  y = [-25; 25];
-  #TODO: assign colors to maneuver planes: how to vectorize this?
-  cmat = zeros(2,2,3);
-  for idx = 1:length(mplanes)
-    # rotate to heading
-    theta = 180 - mplanes(idx).hdg + r2box;
-    xyr = [(cosd(theta)*x).-(sind(theta)*y), (sind(theta)*x).+(cosd(theta)*y)];
-    # translate to vehicle position
-    xyr(:,1:2) += mplanes(idx).pos(1:2);
-    [xx yy] = meshgrid(xyr(:,1),xyr(:,2));
-    zz = [-25 -25; 25 25] + mplanes(idx).pos(3);
-    # red for vertical entry, green for exit
-    if mplanes(idx).entry
-      pcolor = red;
-    else
-      pcolor = green;
-    endif
-    for i = 1:3
-      cmat(:,:,i) = pcolor(i);
+  if plotMplanes
+    # plot maneuver plane: vertical, rotated to maneuver heading
+    hold on
+    limits=axis();
+    x = [0; 0];
+    y = [-25; 25];
+    #TODO: assign colors to maneuver planes: how to vectorize this?
+    cmat = zeros(2,2,3);
+    for idx = 1:length(mplanes)
+      # rotate to heading
+      theta = 180 - mplanes(idx).hdg + r2box;
+      xyr = [(cosd(theta)*x).-(sind(theta)*y), (sind(theta)*x).+(cosd(theta)*y)];
+      # translate to vehicle position
+      xyr(:,1:2) += mplanes(idx).pos(1:2);
+      [xx yy] = meshgrid(xyr(:,1),xyr(:,2));
+      zz = [-25 -25; 25 25] + mplanes(idx).pos(3);
+      # red for vertical entry, green for exit
+      if mplanes(idx).entry
+        pcolor = red;
+      else
+        pcolor = green;
+      endif
+      for i = 1:3
+        cmat(:,:,i) = pcolor(i);
+      endfor
+      s1 = surf(xx, yy', zz, cmat);
+      set(s1, 'facealpha', 0.1);
     endfor
-    s1 = surf(xx, yy', zz, cmat);
-    set(s1, 'facealpha', 0.1);
-  endfor
+  endif
 
-  # rotate to runway heading
+  # quaternion to rotate to runway heading
   q2runway = rot2q([0 0 1], deg2rad(-r2box));
 
   # plot delta wing planes at intervals
@@ -323,19 +325,19 @@ if any(whichplots == 2)
   clf
   subplot(2,2,1)
   scatterPlot(xyzr, 1, 2, sizes, colors, blue, [-350 350 0 250])
-  title (sprintf("Plan view\n%s", plotTitle))
+  title (sprintf("Top view\n%s", plotTitle))
   xlabel "east (m)"
   ylabel "north (m)"
 
   subplot(2,2,2)
   scatterPlot(xyzr, 1, 3, sizes, colors, blue, [-350 350 0 400])
-  title (sprintf("North elevation"))
+  title (sprintf("Judge view"))
   xlabel "east (m)"
   ylabel "alt (m)"
 
   subplot(2,2,3)
   scatterPlot(xyzr, 2, 3, sizes, colors, blue, [0 300 0 400])
-  title (sprintf("East elevation"))
+  title (sprintf("End View"))
   xlabel "north (m)"
   ylabel "alt (m)"
 
