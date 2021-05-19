@@ -6,6 +6,9 @@ function plot_maneuver_rotated(startTime, endTime, data,
   
 # pThresh and mingspd are critical parameters for determination of maneuver heading,
 # which must be correct when calling maneuver_roll_pitch
+# TODO: on Thomas David's log 100 stall turn, the calculated roll is wrong
+# from the transition from upline to downline until the mhdg reverses when
+# groundspeed exceeds mingspd?
 
 # rhdg is runway heading: 0 is North, 90 is East
 # latitude is converted to Y axis in meters
@@ -103,6 +106,10 @@ mplanes = [];
 disp(sprintf("Runway heading (CW from North) is %5.1f (East) / %5.1f (West)", 
              rhdg, wrap180(180+rhdg)));
 
+# diagnostics
+reverse = zeros(Nsamp, 1);
+wca_axis = zeros(Nsamp, 3);
+
 onVertical = 0;
 lowgs = false;
 
@@ -147,7 +154,7 @@ for idx = 2:Nsamp
       mplanes = setManeuverPlane(tsp(idx), mplanes, mplane, e_pitch(idx), vENU(idx,:), wca(idx));
     endif  
   endif
-    [roll(idx) pitch(idx) wca(idx)] = maneuver_roll_pitch(mhdg(idx), quat(idx,:), pThresh);
+    [roll(idx) pitch(idx) wca(idx) wca_axis(idx,:) reverse(idx,:)] = maneuver_roll_pitch(mhdg(idx), quat(idx,:), pThresh);
     if abs(wca(idx)) > 12
       disp(sprintf("large wca: %5.1f", wca(idx)));
     endif

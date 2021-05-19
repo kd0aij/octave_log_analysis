@@ -1,4 +1,4 @@
-function test_maneuvers()
+##function test_maneuvers()
 # generate synthetic alignData(POS, GPS, ATT, IMU, NKF1, NKQ1) results
 
 # 25Hz is the normal logging rate for all but IMU and GPS
@@ -46,7 +46,11 @@ rhdg  = 90;
 r2runway = rotv([0 0 1], deg2rad(90-rhdg));
 
 # m/sec in NED earth frame
-wind = [5 0 0]
+wind = [0 0 0]
+  label = "w0"
+  segnum = 1
+  whichplots = 0 #[0 1 2 3]
+  rollTolerance = 10
 
 # straight line entry
 # center of box (150m in front of pilot), 50m AGL
@@ -163,22 +167,17 @@ res(1:Nsamp,1) = pts;
 disp(sprintf("maneuver generation time: %f", time-then));
 
 fflush (stdout);
-##ans = input("plot? ", "s");
-##if ans == 'y' || ans == 'Y'  
-  # plot
-  yawCor = rad2deg(atan2(vectorNorm(wind), state.spd));
+# plot
+yawCor = rad2deg(atan2(vectorNorm(wind), state.spd));
 
-  label = "w5N"
-  segnum = 1
-  whichplots = [0 1 2 3]
-  whichplots = [1 2]
+plot_title = sprintf("roll tolerance %d degrees, crosswind : %5.1f deg",
+                     rollTolerance, yawCor);
+plot_maneuver_rotated(0, (Nsamp-1)*dt, res, segnum, label,
+                         state.origin, rollTolerance, 2, rhdg, 
+                         whichplots, state.pThresh, plot_title);
+label
+segnum
+whichplots
+rollTolerance
 
-  rollTolerance = 10
-  plot_title = sprintf("roll tolerance %d degrees, crosswind : %5.1f deg",
-                       rollTolerance, yawCor);
-  plot_maneuver_rotated(0, (Nsamp-1)*dt, res, segnum, label,
-                           state.origin, rollTolerance, 2, rhdg, 
-                           whichplots, state.pThresh, plot_title);
-##endif
-
-endfunction
+##endfunction
