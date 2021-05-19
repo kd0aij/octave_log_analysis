@@ -1,8 +1,12 @@
 function plot_maneuver_rotated(startTime, endTime, data,
   mnum=0, label='untitled', origin=[39.8420194 -105.2123333 1808], 
-  rTol=15, posIndex=2, rhdg=106, whichplots=[0 1 2 3], pThresh=80, plotTitle='',
+  rTol=15, posIndex=2, rhdg=106, whichplots=[0 1 2 3], pThresh=45, mingspd=10,
+  plotTitle='',
   plotMplanes=false)
   
+# pThresh and mingspd are critical parameters for determination of maneuver heading,
+# which must be correct when calling maneuver_roll_pitch
+
 # rhdg is runway heading: 0 is North, 90 is East
 # latitude is converted to Y axis in meters
 # longitude is converted to X axis in meters
@@ -81,12 +85,12 @@ for idx = 1:Nsamp
 endfor
 avgspd = mean(spd);
 
-# calculate ground heading qualified by a minimum groundspeed
+# calculate ground heading qualified by a minimum groundspeed: mingspd
+# retain previous heading while speed is below mingspd
 ghdg = zeros(Nsamp, 1);
 ghdg(1) = rhdg;
-minspd = 2;
 for idx = 2:Nsamp
-  if spd(idx) > minspd
+  if spd(idx) > mingspd
     ghdg(idx) = atan2d(vENU(idx,1),vENU(idx,2));
   else
     ghdg(idx) = ghdg(idx-1);
@@ -108,6 +112,7 @@ for idx = 2:Nsamp
   # determine maneuver heading based on whether this is a vertical line
   if onVertical
     # maneuver heading is current mplane heading
+    mplane.hdg = getManeuverPlane(rhdg, ghdg(idx));
     mhdg(idx) = mplane.hdg;
     # check for exit from vertical line
     if (abs(e_pitch(idx)) < (pThresh - hyst))
@@ -133,7 +138,7 @@ for idx = 2:Nsamp
       # on entry to vertical line:
       disp("entry to vertical line")
       # pick aerobatic box heading using previous ground heading
-      mplane.hdg = getManeuverPlane(rhdg, ghdg(idx-1));
+      mplane.hdg = getManeuverPlane(rhdg, ghdg(idx));
       mplane.pos = xyzr(idx,:);
       mplane.entry = true;
       mhdg(idx) = mplane.hdg;
@@ -223,8 +228,11 @@ if any(whichplots == 0)
   # quaternion to rotate to runway heading
   q2runway = rot2q([0 0 1], deg2rad(-r2box));
 
-  # plot delta wing planes at intervals
+  # plot delta wing planes every iconInterval seconds
   hold on
+  dt = tsp(2) - tsp(1);
+  iconInterval = 1;
+  icon_ds = round(iconInterval/dt);
   scale = 10;
   gN = 3;
   # 6 xy grid points at [-.1, -1] [.1, -1] [.3, 0] [.1 1] [-.1 1] [-.1 0]
@@ -236,7 +244,7 @@ if any(whichplots == 0)
   yy = zeros(2,3);
   zz = zeros(2,3);
   cmat = zeros(2,3,3);
-  for idx = 1:10:Nsamp
+  for idx = 2:icon_ds:Nsamp
     # rotate and translate from body to world NED
     q = quaternion(quat(idx,1), quat(idx,2), quat(idx,3), quat(idx,4));
     q = q2runway * q;
@@ -266,7 +274,7 @@ if any(whichplots == 0)
   yy = zeros(2,2);
   zz = zeros(2,2);
   cmat = zeros(2,2,3);
-  for idx = 1:10:Nsamp
+  for idx = 1:icon_ds:Nsamp
     # rotate and translate from body to world NED
     q = quaternion(quat(idx,1), quat(idx,2), quat(idx,3), quat(idx,4));
     q = q * rot2q([1 0 0], pi/2);
@@ -303,7 +311,7 @@ if any(whichplots == 1)
   axis tight
   grid minor
   # save figure
-  savefig("eulerVmp", label, mnum, 1080, 540);
+  savefig("eulerVmp", label, mnum, 1080, .375*1080);
   #fname = sprintf("%s_eulerVmp_%d", label, mnum);
   #disp(sprintf("saving 3D track display: %s", fname));
   #print ([fname ".jpg"], "-S1080,540")
@@ -380,10 +388,10 @@ if any(whichplots == 3)
   uroll = unwrapd(roll);
   wuroll = wrap180(uroll, rTol);
 
-  figure(fignum+3, 'position', [900,100,800,800])
+  figure(fignum+3, 'position', [100,100,1200,900])
   clf
   subplot(2,1,1)
-  [ax, h1, h2] = plotyy(tsp, wuroll, tsp, [pitch mhdg]);
+  ax = plotyy(tsp, wuroll, tsp, [pitch mhdg]);
   limits=axis();
   rline = findobj(ax(1),'linestyle','-');
   set(rline,"linestyle",'-');
@@ -442,24 +450,35 @@ if any(whichplots == 3)
   ylabel(ax(1), "roll attitude")
   ylabel(ax(2), "pitch, hdg degrees")
 
+  ### rate plot
   subplot(2,1,2)
-  plot(tsp,rad2deg(gv),'.-')
+  ax = plotyy(tsp,rad2deg(gv),tsp,roll)
   limits=axis();
+  axis(ax(1), [tsp(1) tsp(end) -180-rTol 180+rTol]);
+  axis(ax(2), [tsp(1) tsp(end) -180-rTol 180+rTol]);
+  set(ax(2),'xgrid','off')
+
+  # plot x axis time hacks
   xoffset = (limits(2)-limits(1))/(length(thacks)*4);
   yoffset = limits(3) + (limits(4)-limits(3))/40;
-  #hold on
-  #xticks(thacks);
-  #xticklabels(xlabels);
-  axis([tsp(1),tsp(end),limits(3),limits(4)])
-  grid on
+  xticks(ax(1), thacks);
+  xticks(ax(2), []);
+  xlabels={};
+  for idx=2:length(thacks)
+    xlabels(idx) = sprintf("T%i:%4.1f", idx-1, thacks(idx));
+  endfor
+  xticklabels(xlabels);
+  xticks(ax(1), thacks);
+  grid(ax(1), 'on')
 
   title ("roll, pitch, yaw rates")
   xlabel "time"
-  ylabel "deg/sec)"
+  ylabel(ax(1), "deg/sec")
+  ylabel(ax(2), "roll angle")
   legend("roll","pitch","yaw","location","northeastoutside")
 
   # save figure
-  savefig("RPY", label, mnum, 800, 800);
+  savefig("RPY", label, mnum, 1920, .75*1920);
 endif
 
 # save workspace

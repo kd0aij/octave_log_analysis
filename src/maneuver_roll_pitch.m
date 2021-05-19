@@ -34,12 +34,14 @@ function [roll pitch wca wca_axis] = maneuver_roll_pitch(rhdg, quat, pThresh)
   # calculate Euler pitch in maneuver plane
   [eroll pitch eyaw] = quat2euler(fq);
 
-  # reverse rhdg if euler yaw is within 10 degrees of rhdg+180
-  if (abs(eyaw-rhdg) > 10)
-    if (abs(eyaw-wrap180(rhdg+180)) < 10)
-      rhdg = wrap180(rhdg + 180);
-    end
-  end
+  # HACK: reverse rhdg if euler yaw is within 10 degrees of rhdg+180
+  # this is trying to detect a reversal in ground course, but I had thought
+  # that flipping the hzplane normal shouldn't affect the results
+##  if (abs(eyaw-rhdg) > 10)
+##    if (abs(eyaw-wrap180(rhdg+180)) < 10)
+##      rhdg = wrap180(rhdg + 180);
+##    end
+##  end
   # back out rhdg and pitch
   ryaw = rot2q([0 0 1], deg2rad(-rhdg));
   rpitch = rot2q([0 1 0], deg2rad(-pitch));

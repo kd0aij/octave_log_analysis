@@ -26,8 +26,8 @@ function test_maneuvers()
 
 pkg load quaternion
 pkg load geometry
-clear res;
-close all;
+##clear res;
+##close all;
 
 dt = 1 / 25;
 res = [];
@@ -46,9 +46,7 @@ rhdg  = 90;
 r2runway = rotv([0 0 1], deg2rad(90-rhdg));
 
 # m/sec in NED earth frame
-wind = [0 0 0]; 
-
-label = "w0"
+wind = [5 0 0]
 
 # straight line entry
 # center of box (150m in front of pilot), 50m AGL
@@ -170,14 +168,17 @@ fflush (stdout);
   # plot
   yawCor = rad2deg(atan2(vectorNorm(wind), state.spd));
 
-  rollTolerance = 10;
+  label = "w5N"
+  segnum = 1
+  whichplots = [0 1 2 3]
+  whichplots = [1 2]
+
+  rollTolerance = 10
   plot_title = sprintf("roll tolerance %d degrees, crosswind : %5.1f deg",
                        rollTolerance, yawCor);
-##  plot_maneuver(0, (Nsamp-1)*dt, res, 77, 'test_maneuvers',
-##                           state.origin, rollTolerance, 2, rhdg=rhdg, state.pThresh, plot_title);
-  plot_maneuver_rotated(0, (Nsamp-1)*dt, res, 1, label,
-                           state.origin, rollTolerance, 2, rhdg=rhdg, 
-                           whichplots=[0 1 2 3], state.pThresh, plot_title);
+  plot_maneuver_rotated(0, (Nsamp-1)*dt, res, segnum, label,
+                           state.origin, rollTolerance, 2, rhdg, 
+                           whichplots, state.pThresh, plot_title);
 ##endif
 
 endfunction
