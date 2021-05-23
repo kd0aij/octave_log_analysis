@@ -1,4 +1,4 @@
-function [roll pitch wca wca_axis reverse] = maneuver_roll_pitch(rhdg, quat, pThresh)
+function [roll pitch wca wca_axis reverse] = maneuver_roll_pitch(rhdg, quat)
   # given the maneuver heading: rhdg
   # calculate roll angle as angle between rhdg/earthz plane and body x/y plane
   # input quat is an array [w x y z] or quaternion object: q.w q.i q.j q.k
@@ -7,13 +7,13 @@ function [roll pitch wca wca_axis reverse] = maneuver_roll_pitch(rhdg, quat, pTh
     quat = quaternion(q(1),q(2),q(3),q(4));
   endif
   bx = hamilton_product(quat, [1 0 0]);
-  bz = hamilton_product(quat, [0 0 1]);
+##  bz = hamilton_product(quat, [0 0 1]);
 
   # hzplane is the normal vector which defines the maneuver plane 
   # this hzplane requires maneuvers to lie in a vertical plane parallel to rhdg
   hzplane = [-sind(rhdg) cosd(rhdg) 0];
   
-  bzdhz = dot(bz, hzplane);
+##  bzdhz = dot(bz, hzplane);
   
   # a more general version would allow the maneuver plane to be non-vertical
   # where mplane is (hv cross earthz) rotated about hv by a roll angle

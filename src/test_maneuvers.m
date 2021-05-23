@@ -41,12 +41,13 @@ state.windcomp = 1;
 # for runway number 6: compass heading of 60 degrees
 # for AAM east field runway compass heading of 106 degrees
 rhdg  = 90; 
+mingspd = 10;
 
 # rotation about earth Z to runway heading
 r2runway = rotv([0 0 1], deg2rad(90-rhdg));
 
 # m/sec in NED earth frame
-wind = [0 0 0]
+wind = [5 0 0]
   label = "w0"
   segnum = 1
   whichplots = 0 #[0 1 2 3]
@@ -81,13 +82,30 @@ insideloop = {
   struct('maneuver', 'arc', 'radius', 50, 'arc', 360, 'roll', 0);
 };
 
-rollinginsideloop = {
+cross_insideloop = {
+  struct('setstate', 'windcomp', 'on', 1);
+  struct('setstate', 'position', 'x', pos(1), 'y', pos(2), 'z', pos(3));
+  struct('setstate', 'attitude', 'roll', 0, 'pitch',  0, 'yaw', rhdg+90);
+  # inside loop
+  struct('maneuver', 'arc', 'radius', 50, 'arc', 360, 'roll', 0);
+};
+
+rolling_insideloop = {
   struct('setstate', 'windcomp', 'on', 1);
   struct('setstate', 'position', 'x', pos(1), 'y', pos(2), 'z', pos(3));
   struct('setstate', 'attitude', 'roll', 0, 'pitch',  0, 'yaw', rhdg);
   # inside loop
   struct('maneuver', 'arc', 'radius', 50, 'arc', 360, 'roll', 360);
 };
+
+rolling_spiral = {
+  struct('setstate', 'windcomp', 'on', 1);
+  struct('setstate', 'position', 'x', pos(1), 'y', pos(2), 'z', pos(3));
+  struct('setstate', 'attitude', 'roll', 0, 'pitch',  0, 'yaw', rhdg);
+
+  struct('setstate', 'attitude', 'roll', 0, 'pitch',  10, 'yaw', rhdg);
+  struct('maneuver', 'circle', 'radius', 50, 'arc', -360, 'roll', -360);
+}
 
 ##mlist = {
 ##  struct('setstate', 'windcomp', 'on', 1);
@@ -123,7 +141,7 @@ rollinginsideloop = {
 ##};
 
 then = time;
-mlist = rollinginsideloop;
+mlist = rolling_spiral;
 
 for idx = 1:length(mlist)
   item = mlist{idx};
@@ -174,7 +192,7 @@ plot_title = sprintf("roll tolerance %d degrees, crosswind : %5.1f deg",
                      rollTolerance, yawCor);
 plot_maneuver_rotated(0, (Nsamp-1)*dt, res, segnum, label,
                          state.origin, rollTolerance, 2, rhdg, 
-                         whichplots, state.pThresh, plot_title);
+                         whichplots, state.pThresh, mingspd, plot_title);
 label
 segnum
 whichplots

@@ -131,7 +131,7 @@ for idx = 2:Nsamp
       mplane.hdg = ghdg(idx);
       mplane.pos = xyzr(idx,:);
       mplane.entry = false;
-      disp(sprintf("rotated maneuver heading %3.0f", mplane.hdg));
+      disp(sprintf("rotated maneuver heading %3.0f, ghdg: %3.0f", mplane.hdg, ghdg(idx)));
       # record ground heading maneuver plane
       mplanes = setManeuverPlane(tsp(idx), mplanes, mplane, e_pitch(idx), vENU(idx,:), wca(idx));
       mhdg(idx) = ghdg(idx);
@@ -149,12 +149,12 @@ for idx = 2:Nsamp
       mplane.pos = xyzr(idx,:);
       mplane.entry = true;
       mhdg(idx) = mplane.hdg;
-      disp(sprintf("rotated maneuver heading %3.0f", mplane.hdg));
+      disp(sprintf("rotated maneuver heading %3.0f, ghdg: %3.0f", mplane.hdg, ghdg(idx)));
       # record vertical maneuver plane
       mplanes = setManeuverPlane(tsp(idx), mplanes, mplane, e_pitch(idx), vENU(idx,:), wca(idx));
     endif  
   endif
-    [roll(idx) pitch(idx) wca(idx) wca_axis(idx,:) reverse(idx,:)] = maneuver_roll_pitch(mhdg(idx), quat(idx,:), pThresh);
+    [roll(idx) pitch(idx) wca(idx) wca_axis(idx,:) reverse(idx,:)] = maneuver_roll_pitch(mhdg(idx), quat(idx,:));
     if abs(wca(idx)) > 12
       disp(sprintf("large wca: %5.1f", wca(idx)));
     endif
