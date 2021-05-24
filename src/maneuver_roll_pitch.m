@@ -37,13 +37,15 @@ function [roll pitch wca wca_axis reverse] = maneuver_roll_pitch(rhdg, quat)
   # calculate Euler pitch in maneuver plane
   [eroll pitch eyaw] = quat2euler(fq);
 
-  # HACK: reverse rhdg if sign of euler yaw is different from that of rhdg
-  # this is detecting a reversal in ground course at low gspd, but I had thought
-  # that flipping the hzplane normal shouldn't affect the results
+  # HACK: reverse rhdg if euler yaw differs by more than 90 degrees
+  # this is necessary for the vertical 8 in fc100, but breaks the roll
+  # calculation for the cross_box_humpty in test_maneuvers.
+  # Problem is euler roll/yaw are just noise when pitch is exactly 90
+  # but qualifying this on pitch magnitude didn't seem to help.
   reverse = false;
-  if sign(eyaw) != sign(rhdg)
+  if abs(pitch) < 89.9 && abs(wrap(eyaw - rhdg)) > 90 
       reverse = true;
-      rhdg = wrap180(rhdg + 180);
+      rhdg = wrap(rhdg + 180);
   end
   
   # back out rhdg and pitch

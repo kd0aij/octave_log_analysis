@@ -80,6 +80,7 @@ yaw = hdg2yaw(hdg);
 
 e_roll = data(startIndex:endIndex,5);
 e_pitch = data(startIndex:endIndex,6);
+e_yaw = data(startIndex:endIndex,7);
 
 # calculate average speed
 spd = zeros(Nsamp, 1);
@@ -119,7 +120,7 @@ for idx = 2:Nsamp
   # determine maneuver heading based on whether this is a vertical line
   if onVertical
     # maneuver heading is current mplane heading
-    mplane.hdg = getManeuverPlane(rhdg, ghdg(idx));
+    ## lock in the maneuver plane till this line is exited
     mhdg(idx) = mplane.hdg;
     # check for exit from vertical line
     if (abs(e_pitch(idx)) < (pThresh - hyst))
@@ -400,10 +401,10 @@ if any(whichplots == 3)
   subplot(2,1,1)
   ax = plotyy(tsp, wuroll, tsp, [pitch mhdg]);
   limits=axis();
-  rline = findobj(ax(1),'linestyle','-');
-  set(rline,"linestyle",'-');
-  set(rline,"marker",'.');
-  set(rline,"markersize",10);
+##  rline = findobj(ax(1),'linestyle','-');
+##  set(rline,"linestyle",'-');
+##  set(rline,"marker",'.');
+##  set(rline,"markersize",10);
   axis(ax(1), [tsp(1) tsp(end) -180-rTol 180+rTol]);
   axis(ax(2), [tsp(1) tsp(end) -180-rTol 180+rTol]);
   grid(ax(1), 'on')
@@ -418,10 +419,10 @@ if any(whichplots == 3)
   ##plot(ax(2), tsp(xxx), pitch(xxx), '.r');
 
   # highlight roll error > rTol
-  if length(rollErr) > 0
-    plot(ax(1), tsp(rollErr), roll(rollErr), '.r');
-  endif
-  legend("roll", "rTol", "pitch", "hdg", "location", "northeastoutside");
+##  if length(rollErr) > 0
+##    plot(ax(1), tsp(rollErr), roll(rollErr), '.r');
+##  endif
+  legend("roll", "pitch", "hdg", "location", "northeastoutside");
 
   # plot x axis time hacks
   xoffset = (limits(2)-limits(1))/(length(thacks)*4);
@@ -482,10 +483,10 @@ if any(whichplots == 3)
   xlabel "time"
   ylabel(ax(1), "deg/sec")
   ylabel(ax(2), "roll angle")
-  legend("roll","pitch","yaw","location","northeastoutside")
+  legend("roll","pitch","yaw","mroll","location","northeastoutside")
 
   # save figure
-  savefig("RPY", label, mnum, 1920, .75*1920);
+  savefig("RPY", label, mnum, 1000, 750);
 endif
 
 # save workspace

@@ -1,4 +1,4 @@
-##function test_maneuvers()
+function test_maneuvers()
 # generate synthetic alignData(POS, GPS, ATT, IMU, NKF1, NKQ1) results
 
 # 25Hz is the normal logging rate for all but IMU and GPS
@@ -33,7 +33,7 @@ dt = 1 / 25;
 res = [];
 
 state.origin = [39.8420194 -105.2123333 1808];
-state.pThresh = 45;
+state.pThresh = 30;
 state.noise = 0; # degrees, meters
 state.windcomp = 1;
 
@@ -45,13 +45,6 @@ mingspd = 10;
 
 # rotation about earth Z to runway heading
 r2runway = rotv([0 0 1], deg2rad(90-rhdg));
-
-# m/sec in NED earth frame
-wind = [5 0 0]
-  label = "w0"
-  segnum = 1
-  whichplots = 0 #[0 1 2 3]
-  rollTolerance = 10
 
 # straight line entry
 # center of box (150m in front of pilot), 50m AGL
@@ -98,6 +91,24 @@ rolling_insideloop = {
   struct('maneuver', 'arc', 'radius', 50, 'arc', 360, 'roll', 360);
 };
 
+circle = {
+  struct('setstate', 'windcomp', 'on', 1);
+  struct('setstate', 'position', 'x', pos(1), 'y', pos(2), 'z', pos(3));
+  struct('setstate', 'attitude', 'roll', 0, 'pitch',  0, 'yaw', rhdg);
+
+  struct('setstate', 'attitude', 'roll', 0, 'pitch',  0, 'yaw', rhdg);
+  struct('maneuver', 'circle', 'radius', 50, 'arc', 360, 'roll', 0);
+};
+
+spiral = {
+  struct('setstate', 'windcomp', 'on', 1);
+  struct('setstate', 'position', 'x', pos(1), 'y', pos(2), 'z', pos(3));
+  struct('setstate', 'attitude', 'roll', 0, 'pitch',  0, 'yaw', rhdg);
+
+  struct('setstate', 'attitude', 'roll', 0, 'pitch',  10, 'yaw', rhdg);
+  struct('maneuver', 'circle', 'radius', 50, 'arc', 0, 'roll', -360);
+};
+
 rolling_spiral = {
   struct('setstate', 'windcomp', 'on', 1);
   struct('setstate', 'position', 'x', pos(1), 'y', pos(2), 'z', pos(3));
@@ -105,7 +116,38 @@ rolling_spiral = {
 
   struct('setstate', 'attitude', 'roll', 0, 'pitch',  10, 'yaw', rhdg);
   struct('maneuver', 'circle', 'radius', 50, 'arc', -360, 'roll', -360);
-}
+};
+
+# arclength = R dtheta
+# S = state.spd
+# arc duration D = arclength / S = dtheta (R / S)
+# arcRate (rad/sec) = S / R
+# D = dtheta (R / S) = dtheta / arcRate
+# arc radius R = D S / dtheta
+
+# radius for 1 rad/sec: S
+# radius for pi/2 rad/sec: S / (pi/2)
+# radius for 90 deg/sec: S * rad2deg(1)
+R90dps = state.spd / (pi/2);
+
+cross_box_humpty = {
+  struct('setstate', 'windcomp', 'on', 1);
+  struct('setstate', 'position', 'x', pos(1), 'y', pos(2), 'z', pos(3));
+  struct('setstate', 'attitude', 'roll', 0, 'pitch',  0, 'yaw', rhdg);
+  
+  # straight and level entry
+  struct('maneuver', 'line', 'T', 120.0/state.spd);
+  # pull to vertical in 1 second
+  struct('maneuver', 'arc', 'radius', R90dps, 'arc', 90, 'roll', 0);
+
+  struct('maneuver', 'roll', 'T', 120.0/state.spd, 'arc', 90);
+  struct('maneuver', 'arc', 'radius', 38.2, 'arc', 180, 'roll', 0);
+  struct('maneuver', 'roll', 'T', 120.0/state.spd, 'arc', -90);
+  
+  # pull to vertical in 1 second
+  struct('maneuver', 'arc', 'radius', R90dps, 'arc', 90, 'roll', 0);
+  struct('maneuver', 'line', 'T', 120.0/state.spd);
+};
 
 ##mlist = {
 ##  struct('setstate', 'windcomp', 'on', 1);
@@ -141,7 +183,15 @@ rolling_spiral = {
 ##};
 
 then = time;
-mlist = rolling_spiral;
+mlist = cross_box_humpty;
+
+# m/sec in NED earth frame
+wind = [0 0 0]
+label = sprintf("Wind_%1.0fN%1.0fE%1.0fD", wind(1), wind(2), wind(3))
+segnum = 1
+whichplots = [0 1] # 2 3]
+rollTolerance = 10
+
 
 for idx = 1:length(mlist)
   item = mlist{idx};
@@ -192,10 +242,11 @@ plot_title = sprintf("roll tolerance %d degrees, crosswind : %5.1f deg",
                      rollTolerance, yawCor);
 plot_maneuver_rotated(0, (Nsamp-1)*dt, res, segnum, label,
                          state.origin, rollTolerance, 2, rhdg, 
-                         whichplots, state.pThresh, mingspd, plot_title);
+                         whichplots, state.pThresh, mingspd, plot_title,
+                         plotMplanes=true);
 label
 segnum
 whichplots
 rollTolerance
 
-##endfunction
+endfunction
