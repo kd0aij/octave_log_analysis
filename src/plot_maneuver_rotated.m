@@ -73,14 +73,14 @@ roll  = zeros(Nsamp, 1);
 pitch = zeros(Nsamp, 1);
 wca   = zeros(Nsamp, 1);
 xwnd  = zeros(Nsamp, 1);
-hdg   = data(startIndex:endIndex,7);
+
+e_roll  = data(startIndex:endIndex,5);
+e_pitch = data(startIndex:endIndex,6);
+e_yaw   = data(startIndex:endIndex,7);
 # convert hdg from [0,360] (positive CW) to 
 # [180,-180] (positive CW) (with North at 0)
-yaw = hdg2yaw(hdg);
+yaw = hdg2yaw(e_yaw);
 
-e_roll = data(startIndex:endIndex,5);
-e_pitch = data(startIndex:endIndex,6);
-e_yaw = data(startIndex:endIndex,7);
 
 # calculate average speed
 spd = zeros(Nsamp, 1);
@@ -95,7 +95,7 @@ ghdg = zeros(Nsamp, 1);
 ghdg(1) = rhdg;
 for idx = 2:Nsamp
   if spd(idx) > mingspd
-    ghdg(idx) = atan2d(vENU(idx,1),vENU(idx,2));
+    ghdg(idx) = atan2d(vNED(idx,2),vNED(idx,1));
   else
     ghdg(idx) = ghdg(idx-1);
   endif  
