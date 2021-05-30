@@ -6,9 +6,6 @@ function plot_maneuver_rotated(startTime, endTime, data,
   
 # pThresh and mingspd are critical parameters for determination of maneuver heading,
 # which must be correct when calling maneuver_roll_pitch
-# TODO: on Thomas David's log 100 stall turn, the calculated roll is wrong
-# from the transition from upline to downline until the mhdg reverses when
-# groundspeed exceeds mingspd?
 
 # rhdg is runway heading: 0 is North, 90 is East
 # latitude is converted to Y axis in meters
@@ -95,7 +92,9 @@ ghdg = zeros(Nsamp, 1);
 ghdg(1) = rhdg;
 for idx = 2:Nsamp
   if spd(idx) > mingspd
-    ghdg(idx) = atan2d(vNED(idx,2),vNED(idx,1));
+    # atan2(x,y) is the compass heading (CW from North=[0,1])
+    # atan2(y,x) is the cartesian angle (CCW from East=[1,0])
+    ghdg(idx) = atan2d(vENU(idx,1),vENU(idx,2));
   else
     ghdg(idx) = ghdg(idx-1);
   endif  
@@ -146,6 +145,8 @@ for idx = 2:Nsamp
       # on entry to vertical line:
       disp("entry to vertical line")
       # pick aerobatic box heading using previous ground heading
+      # ??? rhdg is a compass heading, but ghdg is atan2(vyNED, vxNED)
+      # which is cartesian (CCW from East)
       mplane.hdg = getManeuverPlane(rhdg, ghdg(idx));
       mplane.pos = xyzr(idx,:);
       mplane.entry = true;
@@ -198,7 +199,7 @@ if any(whichplots == 0)
   axis equal
   grid on
   rotate3d on
-  title('ENU xyz')
+  title('ENU xyz: runway rotated to East/West')
   xlabel('East')
   ylabel('North')
   zlabel('Alt')
@@ -221,9 +222,9 @@ if any(whichplots == 0)
       zz = [-25 -25; 25 25] + mplanes(idx).pos(3);
       # red for vertical entry, green for exit
       if mplanes(idx).entry
-        pcolor = red;
-      else
         pcolor = green;
+      else
+        pcolor = red;
       endif
       for i = 1:3
         cmat(:,:,i) = pcolor(i);

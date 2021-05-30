@@ -11,6 +11,7 @@ function [roll pitch wca wca_axis reverse] = maneuver_roll_pitch(rhdg, quat)
 
   # hzplane is the normal vector which defines the maneuver plane 
   # this hzplane requires maneuvers to lie in a vertical plane parallel to rhdg
+  # Note that rhdg is a compass heading and hzplane is a vector in the ENU frame
   hzplane = [-sind(rhdg) cosd(rhdg) 0];
   
 ##  bzdhz = dot(bz, hzplane);
@@ -42,6 +43,7 @@ function [roll pitch wca wca_axis reverse] = maneuver_roll_pitch(rhdg, quat)
   # calculation for the cross_box_humpty in test_maneuvers.
   # Problem is euler roll/yaw are just noise when pitch is exactly 90
   # but qualifying this on pitch magnitude didn't seem to help.
+  # *** this seems to mix compass heading with cartesian (euler yaw) ***
   reverse = false;
   if abs(pitch) < 89.9 && abs(wrap(eyaw - rhdg)) > 90 
       reverse = true;
